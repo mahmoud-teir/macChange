@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">MAC Changer</string>
+    <string name="scan_mac_location">Scan MAC Location</string>
+    <string name="backup_efs">Backup EFS</string>
+    <string name="enter_new_mac">New MAC (e.g., 02:AA:34:9F:22:11)</string>
+    <string name="change_mac">Change MAC</string>
+    <string name="restore_backup">Restore Backup</string>
+</resources>
