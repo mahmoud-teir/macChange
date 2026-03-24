@@ -3,15 +3,32 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="12dp">
 
-    <!-- Row 1: Scan -->
-    <Button
-        android:id="@+id/btnScan"
+    <!-- Row 1: Scan | Detect Device -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/scan_mac_location"
-        android:layout_marginBottom="4dp"/>
+        android:orientation="horizontal"
+        android:layout_marginBottom="4dp">
+
+        <Button
+            android:id="@+id/btnScan"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/scan_mac_location"
+            android:layout_marginEnd="4dp"/>
+
+        <Button
+            android:id="@+id/btnDetect"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/detect_device"
+            android:layout_marginStart="4dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+    </LinearLayout>
 
     <!-- Row 2: Backup | Restore -->
     <LinearLayout
@@ -37,7 +54,7 @@
             android:layout_marginStart="4dp"/>
     </LinearLayout>
 
-    <!-- Row 3: MAC input + Random button -->
+    <!-- Row 3: MAC input + Random -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -71,12 +88,12 @@
         android:text="@string/change_mac"
         android:layout_marginBottom="4dp"/>
 
-    <!-- Row 5: History | Schedule | Export -->
+    <!-- Row 5: History | Profiles | Net Info -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="8dp">
+        android:layout_marginBottom="4dp">
 
         <Button
             android:id="@+id/btnHistory"
@@ -84,8 +101,38 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/view_history"
-            android:layout_marginEnd="4dp"
+            android:textSize="11sp"
+            android:layout_marginEnd="2dp"
             style="?attr/materialButtonOutlinedStyle"/>
+
+        <Button
+            android:id="@+id/btnProfiles"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/profiles"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+
+        <Button
+            android:id="@+id/btnNetInfo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/network_info"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+    </LinearLayout>
+
+    <!-- Row 6: Schedule | Monitor | Export -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
 
         <Button
             android:id="@+id/btnSchedule"
@@ -93,8 +140,19 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/schedule_change"
-            android:layout_marginStart="4dp"
-            android:layout_marginEnd="4dp"
+            android:textSize="11sp"
+            android:layout_marginEnd="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+
+        <Button
+            android:id="@+id/btnMonitor"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/monitor_toggle"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
             style="?attr/materialButtonOutlinedStyle"/>
 
         <Button
@@ -103,7 +161,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/export_log"
-            android:layout_marginStart="4dp"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
             style="?attr/materialButtonOutlinedStyle"/>
     </LinearLayout>
 
@@ -120,7 +179,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="8dp"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:typeface="monospace"/>
     </ScrollView>
 

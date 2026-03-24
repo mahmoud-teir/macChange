@@ -5,11 +5,15 @@
     <string name="enter_new_mac">New MAC (e.g., 02:AA:34:9F:22:11)</string>
     <string name="change_mac">Change MAC</string>
     <string name="restore_backup">Restore Backup</string>
-    <string name="random_mac">Random MAC</string>
+    <string name="random_mac">Random</string>
     <string name="view_history">History</string>
-    <string name="schedule_change">Schedule Auto-Change</string>
-    <string name="export_log">Export Log</string>
+    <string name="schedule_change">Schedule</string>
+    <string name="export_log">Export</string>
     <string name="stop_schedule">Stop Schedule</string>
+    <string name="profiles">Profiles</string>
+    <string name="network_info">Net Info</string>
+    <string name="detect_device">Detect Device</string>
+    <string name="monitor_toggle">Monitor</string>
 
     <!-- Dialogs -->
     <string name="confirm_backup_title">Confirm Backup</string>
@@ -27,4 +31,11 @@
     <string name="schedule_title">Schedule Auto MAC Change</string>
     <string name="schedule_msg">Change MAC automatically every N minutes.\nEnter interval (15–1440):</string>
     <string name="schedule_start">Start</string>
+
+    <!-- Profiles -->
+    <string name="profiles_title">MAC Profiles</string>
+    <string name="save_profile">Save as Profile</string>
+    <string name="profile_name_hint">Profile name (e.g. Work, Cafe)</string>
+    <string name="delete">Delete</string>
+    <string name="apply">Apply</string>
 </resources>

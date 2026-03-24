@@ -6,9 +6,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/**
- * Room entity that stores each MAC address change with a timestamp.
- */
+// ── MAC History Entity ───────────────────────────────────────────────
+
 @Entity(tableName = "mac_history")
 data class MacEntry(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
@@ -33,9 +32,46 @@ interface MacHistoryDao {
     suspend fun getLast(): MacEntry?
 }
 
-@Database(entities = [MacEntry::class], version = 1, exportSchema = false)
+// ── MAC Profile Entity ───────────────────────────────────────────────
+
+@Entity(tableName = "mac_profiles")
+data class MacProfile(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    @ColumnInfo(name = "name") val name: String,
+    @ColumnInfo(name = "mac_address") val macAddress: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis()
+) {
+    fun formattedTime(): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        return sdf.format(Date(createdAt))
+    }
+}
+
+@Dao
+interface MacProfileDao {
+    @Insert
+    suspend fun insert(profile: MacProfile)
+
+    @Delete
+    suspend fun delete(profile: MacProfile)
+
+    @Query("SELECT * FROM mac_profiles ORDER BY name ASC")
+    suspend fun getAll(): List<MacProfile>
+
+    @Query("SELECT * FROM mac_profiles WHERE id = :id")
+    suspend fun getById(id: Int): MacProfile?
+}
+
+// ── Database ─────────────────────────────────────────────────────────
+
+@Database(
+    entities = [MacEntry::class, MacProfile::class],
+    version = 2,
+    exportSchema = false
+)
 abstract class MacHistoryDatabase : RoomDatabase() {
     abstract fun macHistoryDao(): MacHistoryDao
+    abstract fun macProfileDao(): MacProfileDao
 
     companion object {
         @Volatile
@@ -47,7 +83,10 @@ abstract class MacHistoryDatabase : RoomDatabase() {
                     context.applicationContext,
                     MacHistoryDatabase::class.java,
                     "mac_history.db"
-                ).build().also { INSTANCE = it }
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    .also { INSTANCE = it }
             }
         }
     }

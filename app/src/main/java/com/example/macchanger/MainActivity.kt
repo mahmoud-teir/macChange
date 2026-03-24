@@ -3,6 +3,7 @@ package com.example.macchanger
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.widget.Button
@@ -24,26 +25,35 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
- * MAC Changer v2 – root-only Android utility with:
- *   1. MAC comparison before/after change
- *   2. Random MAC generation (locally administered)
- *   3. Original MAC saved on first scan (SharedPreferences)
- *   4. Confirmation dialogs before dangerous operations
- *   5. MAC history (Room database)
- *   6. Scheduled auto MAC change (WorkManager)
- *   7. Backup file picker
- *   8. Log export / share
+ * MAC Changer v3 – full-featured root utility.
+ *
+ * Features:
+ *   1. MAC comparison before/after   2. Random MAC generation
+ *   3. Original MAC saved on first scan   4. Confirmation dialogs
+ *   5. MAC history (Room)   6. Scheduled auto-change (WorkManager)
+ *   7. Backup file picker   8. Log export/share
+ *   9. MAC Leak Detection (foreground service)
+ *  10. OUI Vendor Lookup (offline)
+ *  11. MAC Profiles (Room)
+ *  12. Network info display
+ *  13. Persistent notification
+ *  14. Auto device/chipset detection
+ *  15. EFS integrity check (checksum)
  */
 class MainActivity : AppCompatActivity() {
 
     // ── UI ───────────────────────────────────────────────────────────
     private lateinit var btnScan: Button
+    private lateinit var btnDetect: Button
     private lateinit var btnBackup: Button
     private lateinit var btnChange: Button
     private lateinit var btnRestore: Button
     private lateinit var btnRandom: Button
     private lateinit var btnHistory: Button
+    private lateinit var btnProfiles: Button
+    private lateinit var btnNetInfo: Button
     private lateinit var btnSchedule: Button
+    private lateinit var btnMonitor: Button
     private lateinit var btnExport: Button
     private lateinit var etNewMac: EditText
     private lateinit var tvLog: TextView
@@ -52,6 +62,8 @@ class MainActivity : AppCompatActivity() {
     // ── State ────────────────────────────────────────────────────────
     private var macInfoPath: String = ""
     private var macCobPath: String = ""
+    private var efsPartition: String? = null
+    private var monitorRunning = false
     private lateinit var prefs: SharedPreferences
     private lateinit var db: MacHistoryDatabase
 
@@ -67,6 +79,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_ORIGINAL_MAC = "original_mac"
         private const val KEY_MAC_INFO_PATH = "mac_info_path"
         private const val KEY_MAC_COB_PATH = "mac_cob_path"
+        private const val KEY_EFS_PARTITION = "efs_partition"
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────
@@ -78,50 +91,67 @@ class MainActivity : AppCompatActivity() {
         prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         db = MacHistoryDatabase.getInstance(this)
 
-        // Bind views
+        bindViews()
+        configureSu()
+        restoreState()
+        checkRootAccess()
+        setListeners()
+    }
+
+    private fun bindViews() {
         btnScan = findViewById(R.id.btnScan)
+        btnDetect = findViewById(R.id.btnDetect)
         btnBackup = findViewById(R.id.btnBackup)
         btnChange = findViewById(R.id.btnChange)
         btnRestore = findViewById(R.id.btnRestore)
         btnRandom = findViewById(R.id.btnRandom)
         btnHistory = findViewById(R.id.btnHistory)
+        btnProfiles = findViewById(R.id.btnProfiles)
+        btnNetInfo = findViewById(R.id.btnNetInfo)
         btnSchedule = findViewById(R.id.btnSchedule)
+        btnMonitor = findViewById(R.id.btnMonitor)
         btnExport = findViewById(R.id.btnExport)
         etNewMac = findViewById(R.id.etNewMac)
         tvLog = findViewById(R.id.tvLog)
         scrollView = findViewById(R.id.scrollLog)
+    }
 
-        // Configure libsu
+    private fun configureSu() {
         Shell.enableVerboseLogging = BuildConfig.DEBUG
         Shell.setDefaultBuilder(
             Shell.Builder.create()
                 .setFlags(Shell.FLAG_REDIRECT_STDERR)
                 .setTimeout(30)
         )
+    }
 
-        // Restore saved paths
+    private fun restoreState() {
         macInfoPath = prefs.getString(KEY_MAC_INFO_PATH, "") ?: ""
         macCobPath = prefs.getString(KEY_MAC_COB_PATH, "") ?: ""
+        efsPartition = prefs.getString(KEY_EFS_PARTITION, null)
 
-        checkRootAccess()
-
-        // Show saved original MAC if we have it
         val savedOriginal = prefs.getString(KEY_ORIGINAL_MAC, null)
         if (savedOriginal != null) {
-            appendLog("[*] Saved original MAC: $savedOriginal")
+            val vendor = OuiDatabase.lookup(savedOriginal)
+            appendLog("[*] Saved original MAC: $savedOriginal ($vendor)")
         }
         if (macInfoPath.isNotEmpty()) {
             appendLog("[*] Saved MAC path: $macInfoPath")
         }
+    }
 
-        // Button listeners
+    private fun setListeners() {
         btnScan.setOnClickListener { locateMacFiles() }
+        btnDetect.setOnClickListener { detectDevice() }
         btnBackup.setOnClickListener { confirmBackup() }
         btnChange.setOnClickListener { confirmChange() }
         btnRestore.setOnClickListener { showBackupPicker() }
         btnRandom.setOnClickListener { generateAndFillRandomMac() }
         btnHistory.setOnClickListener { showHistory() }
+        btnProfiles.setOnClickListener { showProfiles() }
+        btnNetInfo.setOnClickListener { showNetworkInfo() }
         btnSchedule.setOnClickListener { showScheduleDialog() }
+        btnMonitor.setOnClickListener { toggleMonitor() }
         btnExport.setOnClickListener { exportLog() }
     }
 
@@ -129,9 +159,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkRootAccess() {
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                Shell.cmd("id -u").exec()
-            }
+            val result = withContext(Dispatchers.IO) { Shell.cmd("id -u").exec() }
             if (result.isSuccess && result.out.firstOrNull()?.trim() == "0") {
                 appendLog("[+] Root access granted")
             } else {
@@ -151,90 +179,118 @@ class MainActivity : AppCompatActivity() {
 
     private suspend fun runSu(cmd: String): String = withContext(Dispatchers.IO) {
         val result = Shell.cmd(cmd).exec()
-        if (result.isSuccess) {
-            result.out.joinToString("\n")
-        } else {
-            "ERROR: ${result.err.joinToString("\n")}"
-        }
+        if (result.isSuccess) result.out.joinToString("\n")
+        else "ERROR: ${result.err.joinToString("\n")}"
     }
 
-    private fun isValidMac(mac: String): Boolean {
-        return "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$".toRegex().matches(mac)
-    }
+    private fun isValidMac(mac: String): Boolean =
+        "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$".toRegex().matches(mac)
 
-    /** Read the current active MAC from wlan0 interface */
     private suspend fun readActiveMac(): String {
         val output = runSu("ip link show wlan0")
-        // Parse line like "    link/ether aa:bb:cc:dd:ee:ff brd ff:ff:ff:ff:ff:ff"
         val match = "link/ether\\s+([0-9A-Fa-f:]{17})".toRegex().find(output)
         return match?.groupValues?.get(1)?.uppercase() ?: "unknown"
     }
 
-    // ── Feature 1: Scan with original MAC saving ─────────────────────
+    /** Resolve the mount partition from the mac file path */
+    private fun resolvePartition(): String? = when {
+        macInfoPath.startsWith("/mnt/vendor/efs") -> "/mnt/vendor/efs"
+        macInfoPath.startsWith("/persist") -> "/persist"
+        macInfoPath.startsWith("/efs") -> "/efs"
+        else -> null
+    }
+
+    // ── Feature 14: Auto Device Detection ────────────────────────────
+
+    private fun detectDevice() {
+        appendLog("[*] Detecting device chipset...")
+        lifecycleScope.launch {
+            val info = DeviceDetector.detect()
+            appendLog(DeviceDetector.formatReport(info))
+
+            // Auto-probe the candidate paths
+            for (path in info.macPaths) {
+                val exists = runSu("test -f $path && echo EXISTS").trim()
+                if (exists == "EXISTS") {
+                    macInfoPath = path
+                    macCobPath = path.replace(".mac.info", ".mac.cob")
+                    efsPartition = info.efsPartition
+
+                    prefs.edit()
+                        .putString(KEY_MAC_INFO_PATH, macInfoPath)
+                        .putString(KEY_MAC_COB_PATH, macCobPath)
+                        .putString(KEY_EFS_PARTITION, efsPartition)
+                        .apply()
+
+                    appendLog("[+] Auto-detected MAC path: $macInfoPath")
+                    val mac = runSu("cat $macInfoPath").trim()
+                    appendLog("[*] MAC in file: $mac (${OuiDatabase.lookup(mac)})")
+
+                    // Save original on first detect
+                    if (!prefs.contains(KEY_ORIGINAL_MAC) && mac.isNotEmpty() && !mac.startsWith("ERROR")) {
+                        prefs.edit().putString(KEY_ORIGINAL_MAC, mac).apply()
+                        appendLog("[+] Original MAC saved: $mac")
+                    }
+                    return@launch
+                }
+            }
+            appendLog("[!] No MAC files found at detected paths. Try manual scan.")
+        }
+    }
+
+    // ── Scan ─────────────────────────────────────────────────────────
 
     private fun locateMacFiles() {
         appendLog("[*] Searching for MAC files...")
-
         lifecycleScope.launch {
-            // Try find first
             val findResult = runSu("find / -name '.mac.info' -maxdepth 6 2>/dev/null | head -5")
             val foundPath = findResult.lines().firstOrNull { it.startsWith("/") }?.trim()
 
-            val path = if (!foundPath.isNullOrEmpty()) {
-                foundPath
-            } else {
-                // Fallback: probe known paths
-                knownPaths.firstOrNull { p ->
-                    runSu("test -f $p && echo EXISTS").trim() == "EXISTS"
-                }
+            val path = if (!foundPath.isNullOrEmpty()) foundPath
+            else knownPaths.firstOrNull { p ->
+                runSu("test -f $p && echo EXISTS").trim() == "EXISTS"
             }
 
             if (path != null) {
                 macInfoPath = path
                 macCobPath = path.replace(".mac.info", ".mac.cob")
 
-                // Persist paths for WorkManager
                 prefs.edit()
                     .putString(KEY_MAC_INFO_PATH, macInfoPath)
                     .putString(KEY_MAC_COB_PATH, macCobPath)
                     .apply()
 
                 appendLog("[+] Found: $macInfoPath")
-
-                // Read current MAC from file
                 val fileMac = runSu("cat $macInfoPath").trim()
-                appendLog("[*] MAC in file : $fileMac")
+                val vendor = OuiDatabase.lookup(fileMac)
+                appendLog("[*] MAC in file : $fileMac ($vendor)")
 
-                // Read active MAC from interface
                 val activeMac = readActiveMac()
-                appendLog("[*] Active wlan0: $activeMac")
+                val activeVendor = OuiDatabase.lookup(activeMac)
+                appendLog("[*] Active wlan0: $activeMac ($activeVendor)")
 
-                // Feature 3: Save original MAC on first scan
                 if (!prefs.contains(KEY_ORIGINAL_MAC)) {
                     prefs.edit().putString(KEY_ORIGINAL_MAC, fileMac).apply()
                     appendLog("[+] Original MAC saved: $fileMac")
                 }
             } else {
-                appendLog("[!] Could not locate MAC files automatically.")
+                appendLog("[!] Could not locate MAC files. Try 'Detect Device'.")
             }
         }
     }
 
-    // ── Feature 2: Random MAC generation ─────────────────────────────
+    // ── Random MAC ───────────────────────────────────────────────────
 
     private fun generateAndFillRandomMac() {
         val mac = MacChangeWorker.generateRandomMac()
         etNewMac.setText(mac)
-        appendLog("[*] Generated random MAC: $mac")
+        appendLog("[*] Generated: $mac (${OuiDatabase.lookup(mac)})")
     }
 
-    // ── Feature 4: Confirmation dialogs ──────────────────────────────
+    // ── Confirmation dialogs ─────────────────────────────────────────
 
     private fun confirmBackup() {
-        if (macInfoPath.isEmpty()) {
-            appendLog("[!] Please scan for MAC files first.")
-            return
-        }
+        if (macInfoPath.isEmpty()) { appendLog("[!] Please scan first."); return }
         AlertDialog.Builder(this)
             .setTitle(R.string.confirm_backup_title)
             .setMessage(R.string.confirm_backup_msg)
@@ -245,14 +301,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun confirmChange() {
         val newMac = etNewMac.text.toString().trim()
-        if (!isValidMac(newMac)) {
-            appendLog("[!] Invalid MAC format. Use: XX:XX:XX:XX:XX:XX")
-            return
-        }
-        if (macInfoPath.isEmpty()) {
-            appendLog("[!] Please scan for MAC files first.")
-            return
-        }
+        if (!isValidMac(newMac)) { appendLog("[!] Invalid MAC. Use XX:XX:XX:XX:XX:XX"); return }
+        if (macInfoPath.isEmpty()) { appendLog("[!] Please scan first."); return }
         AlertDialog.Builder(this)
             .setTitle(R.string.confirm_change_title)
             .setMessage(getString(R.string.confirm_change_msg, newMac))
@@ -276,10 +326,11 @@ class MainActivity : AppCompatActivity() {
         val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
         val timestamp = sdf.format(Date())
         val path = "/sdcard/efs_backup_$timestamp.img"
-        appendLog("[*] Creating backup to $path ...")
+        val efsDev = efsPartition ?: "/dev/block/by-name/efs"
+        appendLog("[*] Backup: $efsDev -> $path ...")
 
         lifecycleScope.launch {
-            val output = runSu("dd if=/dev/block/by-name/efs of=$path")
+            val output = runSu("dd if=$efsDev of=$path")
             if (output.startsWith("ERROR")) {
                 appendLog("[!] Backup failed: $output")
             } else {
@@ -290,26 +341,30 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Feature 1: Change MAC with before/after comparison ───────────
+    // ── Feature 15: EFS Integrity Check ──────────────────────────────
+
+    /** Calculate MD5 checksum of a file via shell */
+    private suspend fun md5sum(path: String): String {
+        val output = runSu("md5sum $path")
+        return output.split("\\s+".toRegex()).firstOrNull() ?: "error"
+    }
+
+    // ── Change MAC with before/after + integrity check ───────────────
 
     private fun changeMac(newMac: String) {
         lifecycleScope.launch {
-            // Read MAC BEFORE change
             val macBefore = readActiveMac()
-            appendLog("[*] MAC before: $macBefore")
+            appendLog("[*] MAC before: $macBefore (${OuiDatabase.lookup(macBefore)})")
+
+            // Integrity: checksum before
+            val md5Before = md5sum(macInfoPath)
+            appendLog("[*] Checksum before: $md5Before")
+
             appendLog("[*] Changing MAC to $newMac ...")
 
-            val partition = when {
-                macInfoPath.startsWith("/mnt/vendor/efs") -> "/mnt/vendor/efs"
-                macInfoPath.startsWith("/persist") -> "/persist"
-                macInfoPath.startsWith("/efs") -> "/efs"
-                else -> null
-            }
-
+            val partition = resolvePartition()
             val commands = mutableListOf<String>()
-            if (partition != null) {
-                commands.add("mount -o rw,remount $partition")
-            }
+            if (partition != null) commands.add("mount -o rw,remount $partition")
             commands.addAll(listOf(
                 "echo '$newMac' > $macInfoPath",
                 "echo '$newMac' > $macCobPath",
@@ -329,27 +384,44 @@ class MainActivity : AppCompatActivity() {
                 if (output.isNotBlank()) appendLog(output)
             }
 
-            // Read MAC AFTER change
-            val macAfter = readActiveMac()
-            appendLog("[*] MAC after : $macAfter")
+            // Integrity: checksum after – verify the file was written correctly
+            val md5After = md5sum(macInfoPath)
+            appendLog("[*] Checksum after : $md5After")
 
-            // Comparison
-            if (macAfter.equals(newMac, ignoreCase = true)) {
-                appendLog("[+] SUCCESS: MAC changed successfully!")
+            // Verify file content matches requested MAC
+            val fileContent = runSu("cat $macInfoPath").trim()
+            if (fileContent.equals(newMac, ignoreCase = true)) {
+                appendLog("[+] File integrity OK: content matches requested MAC")
             } else {
-                appendLog("[!] WARNING: Active MAC ($macAfter) differs from requested ($newMac).")
-                appendLog("    This may be due to MAC randomization (Android 12+).")
+                appendLog("[!] INTEGRITY WARNING: file content ($fileContent) != requested ($newMac)")
             }
 
-            // Feature 5: Save to history
-            withContext(Dispatchers.IO) {
-                db.macHistoryDao().insert(MacEntry(macAddress = newMac))
+            // Compare active MAC
+            val macAfter = readActiveMac()
+            appendLog("[*] MAC after : $macAfter (${OuiDatabase.lookup(macAfter)})")
+
+            appendLog("── Comparison ──")
+            appendLog("  Before : $macBefore")
+            appendLog("  After  : $macAfter")
+            appendLog("  Target : $newMac")
+            if (macAfter.equals(newMac, ignoreCase = true)) {
+                appendLog("[+] SUCCESS: MAC changed!")
+            } else {
+                appendLog("[!] Active MAC differs from target (may be Android MAC randomization).")
             }
+
+            // Save to history
+            withContext(Dispatchers.IO) { db.macHistoryDao().insert(MacEntry(macAddress = newMac)) }
             appendLog("[*] Saved to history.")
+
+            // Update monitor notification if running
+            if (monitorRunning) {
+                startMonitorService(macAfter)
+            }
         }
     }
 
-    // ── Feature 7: Backup file picker ────────────────────────────────
+    // ── Backup picker ────────────────────────────────────────────────
 
     private fun showBackupPicker() {
         lifecycleScope.launch {
@@ -363,15 +435,11 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
 
-            // Show file names only in the dialog
             val names = files.map { it.substringAfterLast("/") }.toTypedArray()
-
             withContext(Dispatchers.Main) {
                 AlertDialog.Builder(this@MainActivity)
                     .setTitle(R.string.select_backup_title)
-                    .setItems(names) { _, which ->
-                        confirmRestore(files[which])
-                    }
+                    .setItems(names) { _, which -> confirmRestore(files[which]) }
                     .setNegativeButton(R.string.confirm_no, null)
                     .show()
             }
@@ -381,10 +449,15 @@ class MainActivity : AppCompatActivity() {
     // ── Restore EFS ──────────────────────────────────────────────────
 
     private fun restoreEfs(filePath: String) {
-        appendLog("[*] Restoring EFS from $filePath ...")
+        val efsDev = efsPartition ?: "/dev/block/by-name/efs"
+        appendLog("[*] Restoring: $filePath -> $efsDev ...")
 
         lifecycleScope.launch {
-            val output = runSu("dd if=$filePath of=/dev/block/by-name/efs")
+            // Integrity check of backup file
+            val backupMd5 = md5sum(filePath)
+            appendLog("[*] Backup checksum: $backupMd5")
+
+            val output = runSu("dd if=$filePath of=$efsDev")
             if (output.startsWith("ERROR")) {
                 appendLog("[!] Restore failed: $output")
             } else {
@@ -393,25 +466,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Feature 5: History viewer ────────────────────────────────────
+    // ── History ──────────────────────────────────────────────────────
 
     private fun showHistory() {
         lifecycleScope.launch {
-            val entries = withContext(Dispatchers.IO) {
-                db.macHistoryDao().getAll()
-            }
-
-            if (entries.isEmpty()) {
-                appendLog("[*] No MAC history yet.")
-                return@launch
-            }
+            val entries = withContext(Dispatchers.IO) { db.macHistoryDao().getAll() }
+            if (entries.isEmpty()) { appendLog("[*] No MAC history yet."); return@launch }
 
             val text = buildString {
                 appendLine("── MAC Change History ──")
                 entries.forEachIndexed { i, e ->
-                    appendLine("${i + 1}. ${e.macAddress}  [${e.formattedTime()}]")
+                    val vendor = OuiDatabase.lookup(e.macAddress)
+                    appendLine("${i + 1}. ${e.macAddress} ($vendor)  [${e.formattedTime()}]")
                 }
-                appendLine("── End ──")
+                appendLine("── ${entries.size} entries ──")
             }
 
             withContext(Dispatchers.Main) {
@@ -421,20 +489,169 @@ class MainActivity : AppCompatActivity() {
                     .setPositiveButton("OK", null)
                     .show()
             }
-
             appendLog(text)
         }
     }
 
-    // ── Feature 6: Scheduled auto-change via WorkManager ─────────────
+    // ── Feature 11: MAC Profiles ─────────────────────────────────────
 
-    private fun showScheduleDialog() {
-        // Check if a schedule is already active
-        val workManager = WorkManager.getInstance(applicationContext)
+    private fun showProfiles() {
+        lifecycleScope.launch {
+            val profiles = withContext(Dispatchers.IO) { db.macProfileDao().getAll() }
+
+            withContext(Dispatchers.Main) {
+                val items = mutableListOf("+ Save current MAC as profile")
+                profiles.forEach { p -> items.add("${p.name}: ${p.macAddress}") }
+
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle(R.string.profiles_title)
+                    .setItems(items.toTypedArray()) { _, which ->
+                        if (which == 0) {
+                            showSaveProfileDialog()
+                        } else {
+                            val profile = profiles[which - 1]
+                            showProfileActions(profile)
+                        }
+                    }
+                    .setNegativeButton(R.string.confirm_no, null)
+                    .show()
+            }
+        }
+    }
+
+    private fun showSaveProfileDialog() {
+        val mac = etNewMac.text.toString().trim().let {
+            if (it.isEmpty() || !isValidMac(it)) null else it
+        }
 
         val input = EditText(this).apply {
+            hint = getString(R.string.profile_name_hint)
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.save_profile)
+            .setMessage("MAC: ${mac ?: "(enter a MAC first)"}")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isEmpty()) { appendLog("[!] Profile name cannot be empty."); return@setPositiveButton }
+                if (mac == null) { appendLog("[!] Enter a valid MAC first."); return@setPositiveButton }
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        db.macProfileDao().insert(MacProfile(name = name, macAddress = mac))
+                    }
+                    appendLog("[+] Profile saved: $name -> $mac")
+                }
+            }
+            .setNegativeButton(R.string.confirm_no, null)
+            .show()
+    }
+
+    private fun showProfileActions(profile: MacProfile) {
+        AlertDialog.Builder(this)
+            .setTitle(profile.name)
+            .setMessage("MAC: ${profile.macAddress}\nCreated: ${profile.formattedTime()}")
+            .setPositiveButton(R.string.apply) { _, _ ->
+                etNewMac.setText(profile.macAddress)
+                appendLog("[*] Profile '${profile.name}' loaded: ${profile.macAddress}")
+            }
+            .setNeutralButton(R.string.delete) { _, _ ->
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) { db.macProfileDao().delete(profile) }
+                    appendLog("[*] Profile '${profile.name}' deleted.")
+                }
+            }
+            .setNegativeButton(R.string.confirm_no, null)
+            .show()
+    }
+
+    // ── Feature 12: Network Info ─────────────────────────────────────
+
+    private fun showNetworkInfo() {
+        appendLog("[*] Fetching network info...")
+        lifecycleScope.launch {
+            val mac = readActiveMac()
+            val vendor = OuiDatabase.lookup(mac)
+
+            // SSID
+            val ssid = runSu("dumpsys wifi | grep 'mWifiInfo' | head -1").let { line ->
+                "SSID: ([^,]+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+            }
+
+            // IP address
+            val ip = runSu("ip addr show wlan0 | grep 'inet '").let { line ->
+                "inet\\s+([0-9.]+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+            }
+
+            // Gateway
+            val gateway = runSu("ip route | grep default | grep wlan0").let { line ->
+                "via\\s+([0-9.]+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+            }
+
+            // DNS
+            val dns = runSu("getprop net.dns1").trim().ifEmpty { "N/A" }
+            val dns2 = runSu("getprop net.dns2").trim().ifEmpty { "N/A" }
+
+            // Link speed
+            val linkSpeed = runSu("iw dev wlan0 link | grep 'tx bitrate'").let { line ->
+                "tx bitrate:\\s+(.+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+            }
+
+            val info = buildString {
+                appendLine("── Network Info ──")
+                appendLine("MAC     : $mac ($vendor)")
+                appendLine("SSID    : $ssid")
+                appendLine("IP      : $ip")
+                appendLine("Gateway : $gateway")
+                appendLine("DNS     : $dns / $dns2")
+                appendLine("Speed   : $linkSpeed")
+                appendLine("── End ──")
+            }
+
+            appendLog(info)
+        }
+    }
+
+    // ── Feature 9/13: Monitor Service (leak detection + notification) ─
+
+    private fun toggleMonitor() {
+        if (monitorRunning) {
+            stopService(Intent(this, MacMonitorService::class.java))
+            monitorRunning = false
+            btnMonitor.text = getString(R.string.monitor_toggle)
+            appendLog("[*] Monitor stopped.")
+        } else {
+            lifecycleScope.launch {
+                val mac = readActiveMac()
+                startMonitorService(mac)
+                monitorRunning = true
+                btnMonitor.text = "Stop Monitor"
+                appendLog("[+] Monitor started. Checking MAC every 60s.")
+                appendLog("    Persistent notification active.")
+                appendLog("    Leak detection: alerts if original MAC reappears.")
+            }
+        }
+    }
+
+    private fun startMonitorService(currentMac: String) {
+        val intent = Intent(this, MacMonitorService::class.java).apply {
+            putExtra(MacMonitorService.EXTRA_MAC, currentMac)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    // ── Scheduled auto-change ────────────────────────────────────────
+
+    private fun showScheduleDialog() {
+        val workManager = WorkManager.getInstance(applicationContext)
+        val input = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
-            hint = "Minutes (15–1440)"
+            hint = "Minutes (15-1440)"
         }
 
         AlertDialog.Builder(this)
@@ -444,64 +661,43 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(R.string.schedule_start) { _, _ ->
                 val minutes = input.text.toString().toLongOrNull()
                 if (minutes == null || minutes < 15 || minutes > 1440) {
-                    appendLog("[!] Invalid interval. Must be 15–1440 minutes.")
-                    return@setPositiveButton
+                    appendLog("[!] Invalid interval (15-1440)."); return@setPositiveButton
                 }
                 scheduleAutoChange(minutes)
             }
             .setNeutralButton(R.string.stop_schedule) { _, _ ->
                 workManager.cancelAllWorkByTag(WORK_TAG)
-                appendLog("[*] Auto MAC change schedule stopped.")
+                appendLog("[*] Schedule stopped.")
             }
             .setNegativeButton(R.string.confirm_no, null)
             .show()
     }
 
     private fun scheduleAutoChange(intervalMinutes: Long) {
-        if (macInfoPath.isEmpty()) {
-            appendLog("[!] Please scan for MAC files first.")
-            return
-        }
+        if (macInfoPath.isEmpty()) { appendLog("[!] Please scan first."); return }
 
         val workManager = WorkManager.getInstance(applicationContext)
-
-        // Cancel any existing schedule
         workManager.cancelAllWorkByTag(WORK_TAG)
 
         val request = PeriodicWorkRequestBuilder<MacChangeWorker>(
             intervalMinutes, TimeUnit.MINUTES
         )
             .addTag(WORK_TAG)
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiresBatteryNotLow(true)
-                    .build()
-            )
+            .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
             .build()
 
-        workManager.enqueueUniquePeriodicWork(
-            WORK_TAG,
-            ExistingPeriodicWorkPolicy.REPLACE,
-            request
-        )
-
-        appendLog("[+] Scheduled: MAC will change every $intervalMinutes minutes.")
-        appendLog("    (Minimum interval enforced by WorkManager is 15 min)")
+        workManager.enqueueUniquePeriodicWork(WORK_TAG, ExistingPeriodicWorkPolicy.REPLACE, request)
+        appendLog("[+] Scheduled: MAC changes every $intervalMinutes min.")
     }
 
-    // ── Feature 8: Export / share log ────────────────────────────────
+    // ── Export log ───────────────────────────────────────────────────
 
     private fun exportLog() {
         val logText = tvLog.text.toString()
-        if (logText.isBlank()) {
-            appendLog("[!] Nothing to export.")
-            return
-        }
+        if (logText.isBlank()) { appendLog("[!] Nothing to export."); return }
 
-        // Write to a temp file and share
         val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
         val fileName = "mac_changer_log_${sdf.format(Date())}.txt"
-
         val file = File(getExternalFilesDir(null), fileName)
         file.writeText(logText)
 
@@ -511,7 +707,6 @@ class MainActivity : AppCompatActivity() {
             putExtra(Intent.EXTRA_SUBJECT, "MAC Changer Log")
         }
         startActivity(Intent.createChooser(shareIntent, "Export Log"))
-
         appendLog("[+] Log exported: ${file.absolutePath}")
     }
 }
