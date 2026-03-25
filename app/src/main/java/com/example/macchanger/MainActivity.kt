@@ -18,6 +18,8 @@ import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -39,6 +41,8 @@ import java.util.concurrent.TimeUnit
  *  13. Persistent notification
  *  14. Auto device/chipset detection
  *  15. EFS integrity check (checksum)
+ *  16. WiFi auto-reconnect after MAC change
+ *  17. Import/Export MAC profiles (JSON)
  */
 class MainActivity : AppCompatActivity() {
 
@@ -351,10 +355,56 @@ class MainActivity : AppCompatActivity() {
 
     // ── Change MAC with before/after + integrity check ───────────────
 
+    // ── Feature 16: WiFi Auto-Reconnect helpers ────────────────────
+
+    /** Read current SSID before disconnecting */
+    private suspend fun getCurrentSsid(): String? {
+        val line = runSu("dumpsys wifi | grep 'mWifiInfo' | head -1")
+        val match = "SSID: ([^,]+)".toRegex().find(line)
+        val ssid = match?.groupValues?.get(1)?.trim()?.removeSurrounding("\"")
+        return if (!ssid.isNullOrEmpty() && ssid != "<unknown ssid>" && ssid != "0x") ssid else null
+    }
+
+    /** Attempt to reconnect to the saved SSID after WiFi is re-enabled */
+    private suspend fun reconnectToSsid(ssid: String) {
+        appendLog("[*] Reconnecting to '$ssid' ...")
+        // Get the network ID for the saved SSID
+        val netId = runSu("wpa_cli -i wlan0 list_networks | grep '$ssid'").let { output ->
+            output.lines().firstOrNull { it.contains(ssid) }
+                ?.split("\\s+".toRegex())?.firstOrNull()?.trim()
+        }
+
+        if (netId != null) {
+            runSu("wpa_cli -i wlan0 select_network $netId")
+            appendLog("[+] Sent reconnect command (network #$netId)")
+        } else {
+            // Fallback: use cmd wifi connect on Android 12+
+            runSu("cmd wifi connect-network \"$ssid\" open")
+            appendLog("[*] Fallback reconnect attempted via cmd wifi")
+        }
+
+        // Wait briefly and check connection
+        runSu("sleep 3")
+        val newSsid = getCurrentSsid()
+        if (newSsid != null) {
+            appendLog("[+] Connected to: $newSsid")
+        } else {
+            appendLog("[!] Not connected yet. WiFi may still be associating.")
+        }
+    }
+
+    // ── Change MAC with before/after + integrity check ───────────────
+
     private fun changeMac(newMac: String) {
         lifecycleScope.launch {
             val macBefore = readActiveMac()
             appendLog("[*] MAC before: $macBefore (${OuiDatabase.lookup(macBefore)})")
+
+            // Save current SSID before disconnecting
+            val previousSsid = getCurrentSsid()
+            if (previousSsid != null) {
+                appendLog("[*] Current SSID: $previousSsid (will auto-reconnect)")
+            }
 
             // Integrity: checksum before
             val md5Before = md5sum(macInfoPath)
@@ -408,6 +458,11 @@ class MainActivity : AppCompatActivity() {
                 appendLog("[+] SUCCESS: MAC changed!")
             } else {
                 appendLog("[!] Active MAC differs from target (may be Android MAC randomization).")
+            }
+
+            // Feature 16: Auto-reconnect to previous WiFi network
+            if (previousSsid != null) {
+                reconnectToSsid(previousSsid)
             }
 
             // Save to history
@@ -513,6 +568,8 @@ class MainActivity : AppCompatActivity() {
                             showProfileActions(profile)
                         }
                     }
+                    .setPositiveButton(R.string.export_profiles) { _, _ -> exportProfiles() }
+                    .setNeutralButton(R.string.import_profiles) { _, _ -> importProfiles() }
                     .setNegativeButton(R.string.confirm_no, null)
                     .show()
             }
@@ -564,6 +621,98 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton(R.string.confirm_no, null)
             .show()
+    }
+
+    // ── Feature 17: Import/Export Profiles ──────────────────────────
+
+    private fun exportProfiles() {
+        lifecycleScope.launch {
+            val profiles = withContext(Dispatchers.IO) { db.macProfileDao().getAll() }
+            if (profiles.isEmpty()) {
+                appendLog("[!] No profiles to export.")
+                return@launch
+            }
+
+            val jsonArray = JSONArray()
+            for (p in profiles) {
+                val obj = JSONObject().apply {
+                    put("name", p.name)
+                    put("mac_address", p.macAddress)
+                    put("created_at", p.createdAt)
+                }
+                jsonArray.put(obj)
+            }
+
+            val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+            val fileName = "mac_profiles_${sdf.format(Date())}.json"
+            val file = File("/sdcard/$fileName")
+            file.writeText(jsonArray.toString(2))
+
+            appendLog("[+] Exported ${profiles.size} profiles to /sdcard/$fileName")
+
+            // Share via intent
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_TEXT, jsonArray.toString(2))
+                putExtra(Intent.EXTRA_SUBJECT, "MAC Changer Profiles")
+            }
+            startActivity(Intent.createChooser(shareIntent, "Export Profiles"))
+        }
+    }
+
+    private fun importProfiles() {
+        lifecycleScope.launch {
+            // List all profile JSON files on /sdcard
+            val listOutput = runSu("ls -1 /sdcard/mac_profiles_*.json 2>/dev/null")
+            val files = listOutput.lines()
+                .map { it.trim() }
+                .filter { it.startsWith("/sdcard/") && it.endsWith(".json") }
+
+            if (files.isEmpty()) {
+                appendLog("[!] No profile files found on /sdcard/")
+                appendLog("[*] Expected format: /sdcard/mac_profiles_*.json")
+                return@launch
+            }
+
+            val names = files.map { it.substringAfterLast("/") }.toTypedArray()
+            withContext(Dispatchers.Main) {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle(R.string.import_profiles)
+                    .setItems(names) { _, which -> doImportProfiles(files[which]) }
+                    .setNegativeButton(R.string.confirm_no, null)
+                    .show()
+            }
+        }
+    }
+
+    private fun doImportProfiles(filePath: String) {
+        lifecycleScope.launch {
+            try {
+                val content = runSu("cat $filePath").trim()
+                val jsonArray = JSONArray(content)
+                var imported = 0
+
+                withContext(Dispatchers.IO) {
+                    for (i in 0 until jsonArray.length()) {
+                        val obj = jsonArray.getJSONObject(i)
+                        val name = obj.getString("name")
+                        val mac = obj.getString("mac_address")
+                        val createdAt = obj.optLong("created_at", System.currentTimeMillis())
+
+                        if (isValidMac(mac)) {
+                            db.macProfileDao().insert(
+                                MacProfile(name = name, macAddress = mac, createdAt = createdAt)
+                            )
+                            imported++
+                        }
+                    }
+                }
+
+                appendLog("[+] Imported $imported/${jsonArray.length()} profiles from ${filePath.substringAfterLast("/")}")
+            } catch (e: Exception) {
+                appendLog("[!] Import failed: ${e.message}")
+            }
+        }
     }
 
     // ── Feature 12: Network Info ─────────────────────────────────────

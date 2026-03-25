@@ -38,4 +38,6 @@
     <string name="profile_name_hint">Profile name (e.g. Work, Cafe)</string>
     <string name="delete">Delete</string>
     <string name="apply">Apply</string>
+    <string name="export_profiles">Export</string>
+    <string name="import_profiles">Import</string>
 </resources>
