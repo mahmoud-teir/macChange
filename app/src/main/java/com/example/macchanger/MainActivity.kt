@@ -1,5 +1,7 @@
 package com.example.macchanger
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -10,6 +12,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -43,6 +46,12 @@ import java.util.concurrent.TimeUnit
  *  15. EFS integrity check (checksum)
  *  16. WiFi auto-reconnect after MAC change
  *  17. Import/Export MAC profiles (JSON)
+ *  18. Boot-time MAC change (BOOT_COMPLETED receiver)
+ *  19. Auto EFS backup before MAC change
+ *  20. Copy MAC to clipboard
+ *  21. Vendor MAC spoofing (generate MAC by manufacturer)
+ *  22. Network scanner (ARP table)
+ *  23. MAC per SSID (auto-apply saved MAC per network)
  */
 class MainActivity : AppCompatActivity() {
 
@@ -59,6 +68,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSchedule: Button
     private lateinit var btnMonitor: Button
     private lateinit var btnExport: Button
+    private lateinit var btnVendorMac: Button
+    private lateinit var btnSsidMac: Button
+    private lateinit var btnNetScan: Button
+    private lateinit var btnBootMac: Button
+    private lateinit var btnAutoBackup: Button
+    private lateinit var btnCopyMac: Button
     private lateinit var etNewMac: EditText
     private lateinit var tvLog: TextView
     private lateinit var scrollView: ScrollView
@@ -84,6 +99,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_MAC_INFO_PATH = "mac_info_path"
         private const val KEY_MAC_COB_PATH = "mac_cob_path"
         private const val KEY_EFS_PARTITION = "efs_partition"
+        private const val KEY_AUTO_BACKUP = "auto_backup_enabled"
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────
@@ -98,6 +114,7 @@ class MainActivity : AppCompatActivity() {
         bindViews()
         configureSu()
         restoreState()
+        updateToggleButtons()
         checkRootAccess()
         setListeners()
     }
@@ -115,6 +132,12 @@ class MainActivity : AppCompatActivity() {
         btnSchedule = findViewById(R.id.btnSchedule)
         btnMonitor = findViewById(R.id.btnMonitor)
         btnExport = findViewById(R.id.btnExport)
+        btnVendorMac = findViewById(R.id.btnVendorMac)
+        btnSsidMac = findViewById(R.id.btnSsidMac)
+        btnNetScan = findViewById(R.id.btnNetScan)
+        btnBootMac = findViewById(R.id.btnBootMac)
+        btnAutoBackup = findViewById(R.id.btnAutoBackup)
+        btnCopyMac = findViewById(R.id.btnCopyMac)
         etNewMac = findViewById(R.id.etNewMac)
         tvLog = findViewById(R.id.tvLog)
         scrollView = findViewById(R.id.scrollLog)
@@ -157,6 +180,23 @@ class MainActivity : AppCompatActivity() {
         btnSchedule.setOnClickListener { showScheduleDialog() }
         btnMonitor.setOnClickListener { toggleMonitor() }
         btnExport.setOnClickListener { exportLog() }
+        btnVendorMac.setOnClickListener { showVendorSpoofDialog() }
+        btnSsidMac.setOnClickListener { showSsidMacDialog() }
+        btnNetScan.setOnClickListener { scanNetwork() }
+        btnBootMac.setOnClickListener { toggleBootMac() }
+        btnAutoBackup.setOnClickListener { toggleAutoBackup() }
+        btnCopyMac.setOnClickListener { copyMacToClipboard() }
+    }
+
+    private fun updateToggleButtons() {
+        val bootEnabled = prefs.getBoolean(BootMacReceiver.KEY_BOOT_MAC_ENABLED, false)
+        btnBootMac.text = getString(
+            if (bootEnabled) R.string.boot_mac_enabled else R.string.boot_mac_disabled
+        )
+        val autoBackup = prefs.getBoolean(KEY_AUTO_BACKUP, false)
+        btnAutoBackup.text = getString(
+            if (autoBackup) R.string.auto_backup_enabled else R.string.auto_backup_disabled
+        )
     }
 
     // ── Root check ───────────────────────────────────────────────────
@@ -404,6 +444,20 @@ class MainActivity : AppCompatActivity() {
             val previousSsid = getCurrentSsid()
             if (previousSsid != null) {
                 appendLog("[*] Current SSID: $previousSsid (will auto-reconnect)")
+            }
+
+            // Feature 19: Auto backup before change
+            if (prefs.getBoolean(KEY_AUTO_BACKUP, false)) {
+                appendLog("[*] Auto-backup before change...")
+                val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+                val backupPath = "/sdcard/efs_auto_backup_${sdf.format(Date())}.img"
+                val efsDev = efsPartition ?: "/dev/block/by-name/efs"
+                val backupResult = runSu("dd if=$efsDev of=$backupPath")
+                if (!backupResult.startsWith("ERROR")) {
+                    appendLog("[+] Auto-backup saved: $backupPath")
+                } else {
+                    appendLog("[!] Auto-backup failed: $backupResult")
+                }
             }
 
             // Integrity: checksum before
@@ -837,6 +891,251 @@ class MainActivity : AppCompatActivity() {
 
         workManager.enqueueUniquePeriodicWork(WORK_TAG, ExistingPeriodicWorkPolicy.REPLACE, request)
         appendLog("[+] Scheduled: MAC changes every $intervalMinutes min.")
+    }
+
+    // ── Feature 18: Boot-time MAC Change toggle ────────────────────
+
+    private fun toggleBootMac() {
+        val current = prefs.getBoolean(BootMacReceiver.KEY_BOOT_MAC_ENABLED, false)
+        val newState = !current
+        prefs.edit().putBoolean(BootMacReceiver.KEY_BOOT_MAC_ENABLED, newState).apply()
+        updateToggleButtons()
+
+        if (newState) {
+            if (macInfoPath.isEmpty()) {
+                appendLog("[!] Please scan MAC first before enabling boot-time change.")
+                prefs.edit().putBoolean(BootMacReceiver.KEY_BOOT_MAC_ENABLED, false).apply()
+                updateToggleButtons()
+                return
+            }
+            appendLog("[+] Boot-time MAC change ENABLED")
+            appendLog("    MAC will be randomized automatically after each reboot.")
+        } else {
+            appendLog("[*] Boot-time MAC change DISABLED")
+        }
+    }
+
+    // ── Feature 19: Auto Backup toggle ───────────────────────────────
+
+    private fun toggleAutoBackup() {
+        val current = prefs.getBoolean(KEY_AUTO_BACKUP, false)
+        val newState = !current
+        prefs.edit().putBoolean(KEY_AUTO_BACKUP, newState).apply()
+        updateToggleButtons()
+
+        if (newState) {
+            appendLog("[+] Auto EFS backup ENABLED")
+            appendLog("    EFS will be backed up before each MAC change.")
+        } else {
+            appendLog("[*] Auto EFS backup DISABLED")
+        }
+    }
+
+    // ── Feature 20: Copy MAC to Clipboard ────────────────────────────
+
+    private fun copyMacToClipboard() {
+        lifecycleScope.launch {
+            val mac = readActiveMac()
+            val vendor = OuiDatabase.lookup(mac)
+
+            withContext(Dispatchers.Main) {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("MAC Address", mac))
+                Toast.makeText(this@MainActivity, "Copied: $mac", Toast.LENGTH_SHORT).show()
+                appendLog("[+] Copied to clipboard: $mac ($vendor)")
+            }
+        }
+    }
+
+    // ── Feature 21: Vendor MAC Spoofing ──────────────────────────────
+
+    private fun showVendorSpoofDialog() {
+        val vendors = OuiDatabase.getVendorNames().toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.vendor_spoof_title)
+            .setItems(vendors) { _, which ->
+                val vendor = vendors[which]
+                val mac = OuiDatabase.generateMacForVendor(vendor)
+                if (mac != null) {
+                    etNewMac.setText(mac)
+                    appendLog("[*] Generated $vendor MAC: $mac")
+                } else {
+                    appendLog("[!] No OUI data for $vendor")
+                }
+            }
+            .setNegativeButton(R.string.confirm_no, null)
+            .show()
+    }
+
+    // ── Feature 22: Network Scanner ──────────────────────────────────
+
+    private fun scanNetwork() {
+        appendLog("[*] Scanning network...")
+        lifecycleScope.launch {
+            // Ping broadcast to populate ARP table
+            val gateway = runSu("ip route | grep default | grep wlan0").let { line ->
+                "via\\s+([0-9.]+)".toRegex().find(line)?.groupValues?.get(1)
+            }
+
+            if (gateway == null) {
+                appendLog("[!] No WiFi gateway found. Are you connected?")
+                return@launch
+            }
+
+            // Derive subnet from gateway (e.g., 192.168.1.1 -> 192.168.1)
+            val subnet = gateway.substringBeforeLast(".")
+
+            appendLog("[*] Subnet: $subnet.0/24 (Gateway: $gateway)")
+            appendLog("[*] Sending ARP probes...")
+
+            // Quick ping sweep to populate ARP cache
+            runSu("for i in \$(seq 1 254); do ping -c 1 -W 1 $subnet.\$i > /dev/null 2>&1 & done; wait")
+
+            // Read ARP table
+            val arpOutput = runSu("ip neigh show dev wlan0")
+            val devices = arpOutput.lines()
+                .filter { it.contains("lladdr") }
+                .mapNotNull { line ->
+                    val ip = line.split("\\s+".toRegex()).firstOrNull()
+                    val macMatch = "lladdr\\s+([0-9a-fA-F:]{17})".toRegex().find(line)
+                    val mac = macMatch?.groupValues?.get(1)?.uppercase()
+                    if (ip != null && mac != null) Triple(ip, mac, OuiDatabase.lookup(mac)) else null
+                }
+
+            if (devices.isEmpty()) {
+                appendLog("[!] No devices found in ARP table.")
+                return@launch
+            }
+
+            val report = buildString {
+                appendLine("── Network Scan Results ──")
+                appendLine("Found ${devices.size} device(s):")
+                appendLine()
+                devices.sortedBy { it.first }.forEachIndexed { i, (ip, mac, vendor) ->
+                    appendLine("${i + 1}. $ip")
+                    appendLine("   MAC: $mac ($vendor)")
+                }
+                appendLine("── End ──")
+            }
+
+            appendLog(report)
+
+            // Show dialog with option to clone a MAC
+            val items = devices.map { "${it.first} - ${it.second} (${it.third})" }.toTypedArray()
+            withContext(Dispatchers.Main) {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("${devices.size} Device(s) Found — Tap to Clone MAC")
+                    .setItems(items) { _, which ->
+                        val clonedMac = devices[which].second
+                        etNewMac.setText(clonedMac)
+                        appendLog("[*] Cloned MAC from ${devices[which].first}: $clonedMac")
+                    }
+                    .setNegativeButton(R.string.confirm_no, null)
+                    .show()
+            }
+        }
+    }
+
+    // ── Feature 23: MAC per SSID ─────────────────────────────────────
+
+    private fun showSsidMacDialog() {
+        lifecycleScope.launch {
+            val mappings = withContext(Dispatchers.IO) { db.ssidMacMappingDao().getAll() }
+            val currentSsid = getCurrentSsid()
+
+            withContext(Dispatchers.Main) {
+                val items = mutableListOf<String>()
+                if (currentSsid != null) {
+                    items.add("+ Assign MAC to '$currentSsid'")
+                } else {
+                    items.add("+ Connect to WiFi first to assign")
+                }
+                mappings.forEach { m -> items.add("${m.ssid}: ${m.macAddress}") }
+
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle(R.string.ssid_mac_title)
+                    .setItems(items.toTypedArray()) { _, which ->
+                        if (which == 0 && currentSsid != null) {
+                            showAssignSsidMacDialog(currentSsid)
+                        } else if (which > 0) {
+                            showSsidMacActions(mappings[which - 1])
+                        }
+                    }
+                    .setNegativeButton(R.string.confirm_no, null)
+                    .show()
+            }
+        }
+    }
+
+    private fun showAssignSsidMacDialog(ssid: String) {
+        val mac = etNewMac.text.toString().trim().let {
+            if (it.isEmpty() || !isValidMac(it)) null else it
+        }
+
+        val options = arrayOf(
+            "Use current input: ${mac ?: "(empty/invalid)"}",
+            "Generate random MAC",
+            "Choose by vendor"
+        )
+
+        AlertDialog.Builder(this)
+            .setTitle("Assign MAC to '$ssid'")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> {
+                        if (mac != null) {
+                            saveSsidMacMapping(ssid, mac)
+                        } else {
+                            appendLog("[!] Enter a valid MAC first.")
+                        }
+                    }
+                    1 -> {
+                        val randomMac = MacChangeWorker.generateRandomMac()
+                        saveSsidMacMapping(ssid, randomMac)
+                    }
+                    2 -> {
+                        val vendors = OuiDatabase.getVendorNames().toTypedArray()
+                        AlertDialog.Builder(this)
+                            .setTitle("Choose Vendor for '$ssid'")
+                            .setItems(vendors) { _, v ->
+                                val vendorMac = OuiDatabase.generateMacForVendor(vendors[v])
+                                if (vendorMac != null) saveSsidMacMapping(ssid, vendorMac)
+                            }
+                            .show()
+                    }
+                }
+            }
+            .setNegativeButton(R.string.confirm_no, null)
+            .show()
+    }
+
+    private fun saveSsidMacMapping(ssid: String, mac: String) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                db.ssidMacMappingDao().insertOrUpdate(SsidMacMapping(ssid = ssid, macAddress = mac))
+            }
+            appendLog("[+] SSID mapping saved: '$ssid' -> $mac")
+            appendLog("    This MAC will be suggested when connecting to '$ssid'")
+        }
+    }
+
+    private fun showSsidMacActions(mapping: SsidMacMapping) {
+        AlertDialog.Builder(this)
+            .setTitle(mapping.ssid)
+            .setMessage("Assigned MAC: ${mapping.macAddress}\nVendor: ${OuiDatabase.lookup(mapping.macAddress)}")
+            .setPositiveButton(R.string.apply) { _, _ ->
+                etNewMac.setText(mapping.macAddress)
+                appendLog("[*] Loaded MAC for '${mapping.ssid}': ${mapping.macAddress}")
+            }
+            .setNeutralButton(R.string.delete) { _, _ ->
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) { db.ssidMacMappingDao().delete(mapping) }
+                    appendLog("[*] SSID mapping deleted: '${mapping.ssid}'")
+                }
+            }
+            .setNegativeButton(R.string.confirm_no, null)
+            .show()
     }
 
     // ── Export log ───────────────────────────────────────────────────

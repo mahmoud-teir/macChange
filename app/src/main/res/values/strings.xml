@@ -40,4 +40,20 @@
     <string name="apply">Apply</string>
     <string name="export_profiles">Export</string>
     <string name="import_profiles">Import</string>
+
+    <!-- New Features -->
+    <string name="vendor_mac">Vendor MAC</string>
+    <string name="ssid_mac">SSID MAC</string>
+    <string name="net_scan">Net Scan</string>
+    <string name="boot_mac">Boot MAC</string>
+    <string name="auto_backup">Auto Backup</string>
+    <string name="copy_mac">Copy MAC</string>
+    <string name="vendor_spoof_title">Generate MAC by Vendor</string>
+    <string name="ssid_mac_title">SSID-MAC Mappings</string>
+    <string name="ssid_mac_add">+ Assign MAC to current SSID</string>
+    <string name="net_scan_title">Network Scanner</string>
+    <string name="boot_mac_enabled">Boot MAC: ON</string>
+    <string name="boot_mac_disabled">Boot MAC: OFF</string>
+    <string name="auto_backup_enabled">Auto Backup: ON</string>
+    <string name="auto_backup_disabled">Auto Backup: OFF</string>
 </resources>

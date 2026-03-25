@@ -204,4 +204,22 @@ object OuiDatabase {
         val prefix = normalized.split(":").take(3).joinToString(":")
         return ouiMap[prefix] ?: "Unknown Vendor"
     }
+
+    /** Get sorted list of unique vendor names */
+    fun getVendorNames(): List<String> =
+        ouiMap.values.distinct().filter { it != "Locally Administered (Random)" }.sorted()
+
+    /** Get all OUI prefixes for a given vendor name */
+    fun getOuiPrefixesForVendor(vendor: String): List<String> =
+        ouiMap.filter { it.value == vendor }.keys.toList()
+
+    /** Generate a random MAC with a specific vendor OUI prefix */
+    fun generateMacForVendor(vendor: String): String? {
+        val prefixes = getOuiPrefixesForVendor(vendor)
+        if (prefixes.isEmpty()) return null
+        val prefix = prefixes.random()
+        val randomBytes = ByteArray(3).also { java.security.SecureRandom().nextBytes(it) }
+        val suffix = randomBytes.joinToString(":") { "%02X".format(it) }
+        return "$prefix:$suffix"
+    }
 }
