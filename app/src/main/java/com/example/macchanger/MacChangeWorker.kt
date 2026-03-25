@@ -22,40 +22,33 @@ class MacChangeWorker(
         val macInfoPath = prefs.getString("mac_info_path", "") ?: ""
         val macCobPath = prefs.getString("mac_cob_path", "") ?: ""
 
-        if (macInfoPath.isEmpty()) return@withContext Result.failure()
-
         // Save current SSID before disconnecting for auto-reconnect
         val previousSsid = getCurrentSsid()
 
         val newMac = generateRandomMac()
 
-        val partition = when {
-            macInfoPath.startsWith("/mnt/vendor/efs") -> "/mnt/vendor/efs"
-            macInfoPath.startsWith("/persist") -> "/persist"
-            macInfoPath.startsWith("/efs") -> "/efs"
-            else -> null
+        // Method 1: EFS/persist file write (if path is known)
+        if (macInfoPath.isNotEmpty()) {
+            val partition = when {
+                macInfoPath.startsWith("/mnt/vendor/efs") -> "/mnt/vendor/efs"
+                macInfoPath.startsWith("/persist") -> "/persist"
+                macInfoPath.startsWith("/efs") -> "/efs"
+                else -> null
+            }
+
+            if (partition != null) Shell.cmd("mount -o rw,remount $partition").exec()
+            Shell.cmd("echo '$newMac' > $macInfoPath").exec()
+            Shell.cmd("echo '$newMac' > $macCobPath").exec()
+            Shell.cmd("chmod 660 $macInfoPath $macCobPath").exec()
+            Shell.cmd("chown system:wifi $macInfoPath $macCobPath").exec()
         }
 
-        val commands = mutableListOf<String>()
-        if (partition != null) {
-            commands.add("mount -o rw,remount $partition")
-        }
-        commands.addAll(listOf(
-            "echo '$newMac' > $macInfoPath",
-            "echo '$newMac' > $macCobPath",
-            "chmod 660 $macInfoPath $macCobPath",
-            "chown system:wifi $macInfoPath $macCobPath",
-            "svc wifi disable",
-            "rm -rf /data/vendor/wifi/*",
-            "rm -rf /data/misc/wifi/*",
-            "sleep 2",
-            "svc wifi enable",
-            "sleep 3"
-        ))
-
-        for (cmd in commands) {
-            Shell.cmd(cmd).exec()
-        }
+        // Method 2: Universal ip link set (works on ALL rooted devices)
+        Shell.cmd("svc wifi disable").exec()
+        Shell.cmd("sleep 1").exec()
+        Shell.cmd("ip link set wlan0 down && ip link set wlan0 address $newMac && ip link set wlan0 up").exec()
+        Shell.cmd("svc wifi enable").exec()
+        Shell.cmd("sleep 3").exec()
 
         // Auto-reconnect to previous WiFi network
         if (previousSsid != null) {

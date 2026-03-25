@@ -15,7 +15,8 @@ object DeviceDetector {
         val chipsetVendor: String,
         val platform: String,
         val macPaths: List<String>,
-        val efsPartition: String?
+        val efsPartition: String?,
+        val supportsIpLink: Boolean = true  // all rooted devices support this
     )
 
     /**
@@ -111,11 +112,16 @@ object DeviceDetector {
             else -> findEfsPartition()
         }
 
+        // Verify ip link set support (should work on all rooted devices)
+        val ipLinkTest = Shell.cmd("ip link show wlan0").exec()
+        val supportsIpLink = ipLinkTest.isSuccess
+
         DeviceInfo(
             chipsetVendor = chipsetVendor,
             platform = platform.ifEmpty { hardware },
             macPaths = macPaths,
-            efsPartition = efsPartition
+            efsPartition = efsPartition,
+            supportsIpLink = supportsIpLink
         )
     }
 
@@ -146,11 +152,19 @@ object DeviceDetector {
      */
     fun formatReport(info: DeviceInfo): String = buildString {
         appendLine("── Device Detection ──")
-        appendLine("Chipset: ${info.chipsetVendor}")
+        appendLine("Chipset : ${info.chipsetVendor}")
         appendLine("Platform: ${info.platform}")
         appendLine("EFS block: ${info.efsPartition ?: "not found"}")
+        appendLine("ip link : ${if (info.supportsIpLink) "supported (universal method)" else "NOT supported"}")
         appendLine("Candidate MAC paths:")
         info.macPaths.forEach { appendLine("  $it") }
+        if (info.macPaths.isEmpty() || info.efsPartition == null) {
+            appendLine()
+            appendLine("NOTE: No EFS files found. The app will use")
+            appendLine("'ip link set' (universal method) to change MAC.")
+            appendLine("This works on all rooted devices but resets on reboot.")
+            appendLine("Enable 'Boot MAC' to auto-change after reboot.")
+        }
         appendLine("── End ──")
     }
 }

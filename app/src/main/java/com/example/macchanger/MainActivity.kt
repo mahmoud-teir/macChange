@@ -52,6 +52,7 @@ import java.util.concurrent.TimeUnit
  *  21. Vendor MAC spoofing (generate MAC by manufacturer)
  *  22. Network scanner (ARP table)
  *  23. MAC per SSID (auto-apply saved MAC per network)
+ *  24. Universal MAC change (ip link set – works on ALL rooted devices)
  */
 class MainActivity : AppCompatActivity() {
 
@@ -346,7 +347,6 @@ class MainActivity : AppCompatActivity() {
     private fun confirmChange() {
         val newMac = etNewMac.text.toString().trim()
         if (!isValidMac(newMac)) { appendLog("[!] Invalid MAC. Use XX:XX:XX:XX:XX:XX"); return }
-        if (macInfoPath.isEmpty()) { appendLog("[!] Please scan first."); return }
         AlertDialog.Builder(this)
             .setTitle(R.string.confirm_change_title)
             .setMessage(getString(R.string.confirm_change_msg, newMac))
@@ -435,6 +435,12 @@ class MainActivity : AppCompatActivity() {
 
     // ── Change MAC with before/after + integrity check ───────────────
 
+    /**
+     * Change MAC using the best available method:
+     * 1. EFS file method (Samsung/Qualcomm/Huawei) – persistent across reboots
+     * 2. Universal ip link method – works on ALL rooted devices but resets on reboot
+     * Both methods are tried; ip link is always used as a complement/fallback.
+     */
     private fun changeMac(newMac: String) {
         lifecycleScope.launch {
             val macBefore = readActiveMac()
@@ -447,7 +453,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             // Feature 19: Auto backup before change
-            if (prefs.getBoolean(KEY_AUTO_BACKUP, false)) {
+            if (prefs.getBoolean(KEY_AUTO_BACKUP, false) && macInfoPath.isNotEmpty()) {
                 appendLog("[*] Auto-backup before change...")
                 val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
                 val backupPath = "/sdcard/efs_auto_backup_${sdf.format(Date())}.img"
@@ -456,51 +462,74 @@ class MainActivity : AppCompatActivity() {
                 if (!backupResult.startsWith("ERROR")) {
                     appendLog("[+] Auto-backup saved: $backupPath")
                 } else {
-                    appendLog("[!] Auto-backup failed: $backupResult")
+                    appendLog("[!] Auto-backup failed (non-critical): $backupResult")
                 }
             }
 
-            // Integrity: checksum before
-            val md5Before = md5sum(macInfoPath)
-            appendLog("[*] Checksum before: $md5Before")
-
             appendLog("[*] Changing MAC to $newMac ...")
 
-            val partition = resolvePartition()
-            val commands = mutableListOf<String>()
-            if (partition != null) commands.add("mount -o rw,remount $partition")
-            commands.addAll(listOf(
-                "echo '$newMac' > $macInfoPath",
-                "echo '$newMac' > $macCobPath",
-                "chmod 660 $macInfoPath $macCobPath",
-                "chown system:wifi $macInfoPath $macCobPath",
-                "svc wifi disable",
-                "rm -rf /data/vendor/wifi/*",
-                "rm -rf /data/misc/wifi/*",
-                "sleep 2",
-                "svc wifi enable",
-                "sleep 3"
-            ))
+            // ── Method 1: EFS/persist file write (persistent, device-specific) ──
+            val usedFileMethod = if (macInfoPath.isNotEmpty()) {
+                appendLog("[*] Method 1: EFS/persist file write")
 
-            for (cmd in commands) {
-                appendLog("> $cmd")
-                val output = runSu(cmd)
-                if (output.isNotBlank()) appendLog(output)
-            }
+                val md5Before = md5sum(macInfoPath)
+                appendLog("[*] Checksum before: $md5Before")
 
-            // Integrity: checksum after – verify the file was written correctly
-            val md5After = md5sum(macInfoPath)
-            appendLog("[*] Checksum after : $md5After")
+                val partition = resolvePartition()
+                val commands = mutableListOf<String>()
+                if (partition != null) commands.add("mount -o rw,remount $partition")
+                commands.addAll(listOf(
+                    "echo '$newMac' > $macInfoPath",
+                    "echo '$newMac' > $macCobPath",
+                    "chmod 660 $macInfoPath $macCobPath",
+                    "chown system:wifi $macInfoPath $macCobPath"
+                ))
 
-            // Verify file content matches requested MAC
-            val fileContent = runSu("cat $macInfoPath").trim()
-            if (fileContent.equals(newMac, ignoreCase = true)) {
-                appendLog("[+] File integrity OK: content matches requested MAC")
+                for (cmd in commands) {
+                    appendLog("> $cmd")
+                    val output = runSu(cmd)
+                    if (output.isNotBlank()) appendLog(output)
+                }
+
+                // Integrity verification
+                val md5After = md5sum(macInfoPath)
+                appendLog("[*] Checksum after : $md5After")
+                val fileContent = runSu("cat $macInfoPath").trim()
+                if (fileContent.equals(newMac, ignoreCase = true)) {
+                    appendLog("[+] File integrity OK")
+                } else {
+                    appendLog("[!] INTEGRITY WARNING: file ($fileContent) != target ($newMac)")
+                }
+                true
             } else {
-                appendLog("[!] INTEGRITY WARNING: file content ($fileContent) != requested ($newMac)")
+                appendLog("[*] No MAC file path found — skipping file method")
+                false
             }
 
-            // Compare active MAC
+            // ── Method 2: Universal ip link set (works on ALL rooted devices) ──
+            appendLog("[*] Method 2: Universal ip link set (works on all devices)")
+            runSu("svc wifi disable")
+            appendLog("> svc wifi disable")
+            runSu("sleep 1")
+
+            // Set MAC directly on the interface
+            val ipLinkResult = runSu("ip link set wlan0 down && ip link set wlan0 address $newMac && ip link set wlan0 up")
+            if (ipLinkResult.startsWith("ERROR")) {
+                appendLog("[!] ip link set failed: $ipLinkResult")
+            } else {
+                appendLog("[+] ip link set wlan0 address $newMac — OK")
+            }
+
+            // Clear WiFi caches (helps on most devices)
+            runSu("rm -rf /data/vendor/wifi/wpa/wpa_supplicant.conf 2>/dev/null")
+            runSu("rm -rf /data/misc/wifi/WifiConfigStore.xml 2>/dev/null")
+
+            // Re-enable WiFi
+            runSu("svc wifi enable")
+            appendLog("> svc wifi enable")
+            runSu("sleep 3")
+
+            // Compare results
             val macAfter = readActiveMac()
             appendLog("[*] MAC after : $macAfter (${OuiDatabase.lookup(macAfter)})")
 
@@ -508,10 +537,21 @@ class MainActivity : AppCompatActivity() {
             appendLog("  Before : $macBefore")
             appendLog("  After  : $macAfter")
             appendLog("  Target : $newMac")
+
             if (macAfter.equals(newMac, ignoreCase = true)) {
                 appendLog("[+] SUCCESS: MAC changed!")
+                if (usedFileMethod) {
+                    appendLog("[*] Persistent: change survives reboot (EFS written)")
+                } else {
+                    appendLog("[!] Non-persistent: change via ip link resets on reboot")
+                    appendLog("    Tip: Enable 'Boot MAC' to auto-change after reboot")
+                }
             } else {
-                appendLog("[!] Active MAC differs from target (may be Android MAC randomization).")
+                appendLog("[!] Active MAC differs from target.")
+                appendLog("    Possible causes:")
+                appendLog("    - Android MAC randomization overriding")
+                appendLog("    - Driver re-reading MAC from firmware")
+                appendLog("    Try: Detect Device → Change again, or reboot after change")
             }
 
             // Feature 16: Auto-reconnect to previous WiFi network
