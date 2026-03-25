@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- Row 1: Scan | Detect Device -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="4dp">
+
+        <Button
+            android:id="@+id/btnScan"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/scan_mac_location"
+            android:layout_marginEnd="4dp"/>
+
+        <Button
+            android:id="@+id/btnDetect"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/detect_device"
+            android:layout_marginStart="4dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+    </LinearLayout>
+
+    <!-- Row 2: Backup | Restore -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="4dp">
+
+        <Button
+            android:id="@+id/btnBackup"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/backup_efs"
+            android:layout_marginEnd="4dp"/>
+
+        <Button
+            android:id="@+id/btnRestore"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/restore_backup"
+            android:layout_marginStart="4dp"/>
+    </LinearLayout>
+
+    <!-- Row 3: MAC input + Random -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="4dp">
+
+        <EditText
+            android:id="@+id/etNewMac"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="@string/enter_new_mac"
+            android:inputType="text"
+            android:maxLines="1"
+            android:textSize="14sp"
+            android:layout_marginEnd="4dp"/>
+
+        <Button
+            android:id="@+id/btnRandom"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/random_mac"
+            style="?attr/materialButtonOutlinedStyle"/>
+    </LinearLayout>
+
+    <!-- Row 4: Change MAC -->
+    <Button
+        android:id="@+id/btnChange"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/change_mac"
+        android:layout_marginBottom="4dp"/>
+
+    <!-- Row 5: History | Profiles | Net Info -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="4dp">
+
+        <Button
+            android:id="@+id/btnHistory"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/view_history"
+            android:textSize="11sp"
+            android:layout_marginEnd="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+
+        <Button
+            android:id="@+id/btnProfiles"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/profiles"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+
+        <Button
+            android:id="@+id/btnNetInfo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/network_info"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+    </LinearLayout>
+
+    <!-- Row 6: Schedule | Monitor | Export -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+
+        <Button
+            android:id="@+id/btnSchedule"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/schedule_change"
+            android:textSize="11sp"
+            android:layout_marginEnd="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+
+        <Button
+            android:id="@+id/btnMonitor"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/monitor_toggle"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+
+        <Button
+            android:id="@+id/btnExport"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/export_log"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+    </LinearLayout>
+
+    <!-- Row 7: Vendor MAC | SSID MAC | Net Scan -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="4dp">
+
+        <Button
+            android:id="@+id/btnVendorMac"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/vendor_mac"
+            android:textSize="11sp"
+            android:layout_marginEnd="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+
+        <Button
+            android:id="@+id/btnSsidMac"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/ssid_mac"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+
+        <Button
+            android:id="@+id/btnNetScan"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/net_scan"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+    </LinearLayout>
+
+    <!-- Row 8: Boot MAC | Auto Backup | Copy MAC -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+
+        <Button
+            android:id="@+id/btnBootMac"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/boot_mac"
+            android:textSize="11sp"
+            android:layout_marginEnd="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+
+        <Button
+            android:id="@+id/btnAutoBackup"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/auto_backup"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+
+        <Button
+            android:id="@+id/btnCopyMac"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/copy_mac"
+            android:textSize="11sp"
+            android:layout_marginStart="2dp"
+            style="?attr/materialButtonOutlinedStyle"/>
+    </LinearLayout>
+
+    <!-- Log output -->
+    <ScrollView
+        android:id="@+id/scrollLog"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#F5F5F5">
+
+        <TextView
+            android:id="@+id/tvLog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="8dp"
+            android:textSize="11sp"
+            android:typeface="monospace"/>
+    </ScrollView>
+
+</LinearLayout>

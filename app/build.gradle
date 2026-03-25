@@ -8,6 +8,10 @@ android {
     namespace 'com.example.macchanger'
     compileSdk 34
 
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId "com.example.macchanger"
         minSdk 23
