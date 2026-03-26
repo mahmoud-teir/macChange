@@ -1,16 +1,29 @@
 package com.example.macchanger
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.*
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Divider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -19,7 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.ContentScale.Companion.Crop
+import androidx.compose.ui.layout.ContentScale.Crop
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -27,111 +40,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.Offset
-import kotlinx.coroutines.launch
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun MainScreen(
-    macAddress: String = "",
-    vendor: String = "",
-    uptime: String = "",
-    onDetectClick: () -> Unit = {},
-    onBackupClick: () -> Unit = {},
-    onRestoreClick: () -> Unit = {},
-    onChangeMacClick: () -> Unit = {},
-    onRandomClick: () -> Unit = {},
-    onScanLocationClick: () -> Unit = {},
-    onHistoryClick: () -> Unit = {},
-    onProfilesClick: () -> Unit = {},
-    onNetworkInfoClick: () -> Unit = {},
-    onScheduleClick: () -> Unit = {},
-    onMonitorClick: () -> Unit = {},
-    onExportClick: () -> Unit = {},
-    onVendorMacClick: () -> Unit = {},
-    onSsidMacClick: () -> Unit = {},
-    onNetScanClick: () -> Unit = {},
-    onBootMacClick: () -> Unit = {},
-    onAutoBackupClick: () -> Unit = {},
-    onCopyMacClick: () -> Unit = {},
-    isMonitorRunning: Boolean = false
-) {
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            TopNavigationDrawerShellComponent(
-                onItemClick = { item ->
-                    scope.launch { drawerState.close() }
-                    when(item) {
-                        "Interface Manager" -> onDetectClick()
-                        "Network Scanner" -> onNetScanClick()
-                        "MAC Database" -> onHistoryClick()
-                        "Automation" -> onScheduleClick()
-                        "Global Settings" -> onProfilesClick()
-                    }
-                }
-            )
-        }
-    ) {
-        Body(
-            macAddress = macAddress,
-            vendor = vendor,
-            uptime = uptime,
-            onMenuClick = { scope.launch { drawerState.open() } },
-            onDetectClick = onDetectClick,
-            onBackupClick = onBackupClick,
-            onRestoreClick = onRestoreClick,
-            onChangeMacClick = onChangeMacClick,
-            onRandomClick = onRandomClick,
-            onScanLocationClick = onScanLocationClick,
-            onHistoryClick = onHistoryClick,
-            onProfilesClick = onProfilesClick,
-            onNetworkInfoClick = onNetworkInfoClick,
-            onScheduleClick = onScheduleClick,
-            onMonitorClick = onMonitorClick,
-            onExportClick = onExportClick,
-            onVendorMacClick = onVendorMacClick,
-            onSsidMacClick = onSsidMacClick,
-            onNetScanClick = onNetScanClick,
-            onBootMacClick = onBootMacClick,
-            onAutoBackupClick = onAutoBackupClick,
-            onCopyMacClick = onCopyMacClick,
-            isMonitorRunning = isMonitorRunning
-        )
-    }
-}
+import androidx.compose.ui.unit.sp
 
 @Composable
-fun Body(
-    modifier: Modifier = Modifier,
-    macAddress: String = "",
-    vendor: String = "",
-    uptime: String = "",
-    onMenuClick: () -> Unit = {},
-    onDetectClick: () -> Unit = {},
-    onBackupClick: () -> Unit = {},
-    onRestoreClick: () -> Unit = {},
-    onChangeMacClick: () -> Unit = {},
-    onRandomClick: () -> Unit = {},
-    onScanLocationClick: () -> Unit = {},
-    onHistoryClick: () -> Unit = {},
-    onProfilesClick: () -> Unit = {},
-    onNetworkInfoClick: () -> Unit = {},
-    onScheduleClick: () -> Unit = {},
-    onMonitorClick: () -> Unit = {},
-    onExportClick: () -> Unit = {},
-    onVendorMacClick: () -> Unit = {},
-    onSsidMacClick: () -> Unit = {},
-    onNetScanClick: () -> Unit = {},
-    onBootMacClick: () -> Unit = {},
-    onAutoBackupClick: () -> Unit = {},
-    onCopyMacClick: () -> Unit = {},
-    isMonitorRunning: Boolean = false
-) {
+fun Body(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
                 .requiredWidth(width = 390.dp)
@@ -162,7 +75,7 @@ fun Body(
                         verticalAlignment = Alignment.CenterVertically
                         ) {
                         Image(
-                            painter = painterResource(id = R.drawable.ic_icon),
+                            painter = painterResource(id = R.drawable.container),
                             contentDescription = "Container",
                             colorFilter = ColorFilter.tint(Color(0xff00d1ff)))
                         Column(
@@ -190,13 +103,13 @@ fun Body(
                         Column(
                             verticalArrangement = Arrangement.Center,
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.clickable { onMenuClick() }
+                            modifier = Modifier
                                                         .clip(shape = MaterialTheme.shapes.small)
                                                         .padding(all = 8.dp)
                             ) {
                             Image(
-                                painter = painterResource(id = R.drawable.ic_icon),
-                                contentDescription = "Menu",
+                                painter = painterResource(id = R.drawable.container),
+                                contentDescription = "Container",
                                 colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                             }
                         Divider(
@@ -261,14 +174,14 @@ fun Body(
                                                                                 .padding(all = 20.dp)
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xff69daff)),
                                             modifier = Modifier
                                                                                         .padding(horizontal = 49.5.dp))
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier.clickable { onScanLocationClick() }
+                                            modifier = Modifier
                                                                                         .padding(start = 14.979999542236328.dp,
                                                                                                                                     end = 14.989999771118164.dp)
                                             ) {
@@ -307,14 +220,14 @@ fun Body(
                                                                 .padding(all = 20.dp)
                                 ) {
                                 Image(
-                                    painter = painterResource(id = R.drawable.ic_icon),
+                                    painter = painterResource(id = R.drawable.container),
                                     contentDescription = "Container",
                                     colorFilter = ColorFilter.tint(Color(0xff69daff)),
                                     modifier = Modifier
                                                                         .padding(horizontal = 49.5.dp))
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.clickable { onDetectClick() }
+                                    modifier = Modifier
                                                                         .padding(start = 17.049999237060547.dp,
                                                                                                             end = 17.040000915527344.dp)
                                     ) {
@@ -345,14 +258,14 @@ fun Body(
                                                                                                 shape = RoundedCornerShape(8.dp))
                                 ) {
                                 Image(
-                                    painter = painterResource(id = R.drawable.ic_icon),
+                                    painter = painterResource(id = R.drawable.container),
                                     contentDescription = "Container",
                                     colorFilter = ColorFilter.tint(Color(0xff69daff)),
                                     modifier = Modifier
                                                                         .padding(horizontal = 49.5.dp))
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.clickable { onBackupClick() }
+                                    modifier = Modifier
                                                                         .padding(start = 25.780000686645508.dp,
                                                                                                             end = 25.799999237060547.dp)
                                     ) {
@@ -381,14 +294,14 @@ fun Body(
                                                                 .padding(all = 20.dp)
                                 ) {
                                 Image(
-                                    painter = painterResource(id = R.drawable.ic_icon),
+                                    painter = painterResource(id = R.drawable.container),
                                     contentDescription = "Container",
                                     colorFilter = ColorFilter.tint(Color(0xff69daff)),
                                     modifier = Modifier
                                                                         .padding(horizontal = 49.5.dp))
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.clickable { onRestoreClick() }
+                                    modifier = Modifier
                                                                         .padding(horizontal = 9.dp)
                                     ) {
                                     Text(
@@ -522,7 +435,7 @@ fun Body(
                                                                                                                                                 .fillMaxWidth()
                                                                         ) {
                                                                         Text(
-                                                                            text = macAddress,
+                                                                            text = "00:1A:2B:3C:4D:5E",
                                                                             color = Color(0xff69daff),
                                                                             lineHeight = 1.56.em,
                                                                             style = TextStyle(
@@ -542,7 +455,7 @@ fun Body(
                                                                                                                                 .fillMaxHeight()
                                                                 ) {
                                                                 Image(
-                                                                    painter = painterResource(id = R.drawable.ic_icon),
+                                                                    painter = painterResource(id = R.drawable.container),
                                                                     contentDescription = "Container",
                                                                     colorFilter = ColorFilter.tint(Color(0xff8eff71)),
                                                                     modifier = Modifier
@@ -552,7 +465,7 @@ fun Body(
                                                         Column(
                                                             verticalArrangement = Arrangement.Center,
                                                             horizontalAlignment = Alignment.CenterHorizontally,
-                                                            modifier = Modifier.clickable { onRandomClick() }
+                                                            modifier = Modifier
                                                                                                                         .clip(shape = RoundedCornerShape(8.dp))
                                                                                                                         .background(color = Color(0xff21262c))
                                                                                                                         .padding(horizontal = 24.dp,
@@ -599,7 +512,7 @@ fun Body(
                                             Row(
                                                 horizontalArrangement = Arrangement.Center,
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.clickable { onChangeMacClick() }
+                                                modifier = Modifier
                                                                                                 .fillMaxWidth()
                                                                                                 .clip(shape = RoundedCornerShape(8.dp))
                                                                                                 .background(brush = Brush.linearGradient(
@@ -709,7 +622,7 @@ fun Body(
                                             }
                                         Column() {
                                             Text(
-                                                text = vendor,
+                                                text = "INTEL CORP.",
                                                 color = Color(0xffebeef4),
                                                 lineHeight = 1.33.em,
                                                 style = TextStyle(
@@ -742,7 +655,7 @@ fun Body(
                                             }
                                         Column() {
                                             Text(
-                                                text = uptime,
+                                                text = "14:22:05",
                                                 color = Color(0xff8eff71),
                                                 lineHeight = 1.33.em,
                                                 style = TextStyle(
@@ -766,7 +679,7 @@ fun Body(
                                                                         .padding(all = 12.dp)
                                     ) {
                                     Image(
-                                        painter = painterResource(id = R.drawable.ic_icon),
+                                        painter = painterResource(id = R.drawable.ab6axucfwlw1j4l6orvw9ks5kyeawddrhcxc7beymmqr2cqjehtmsfxhy_bzpzzu28qaqy5howa5xpkpu5zd4qx3ogrczhsq93gsbvuxm_3ekrhubpjscvy6gkdmnr7wg596t2y6xgb8qwb0qn8edpaempftglcuingnezobwfe2zmvana5amqwxm9qoofoairkzmbvboc0mm_gkyomeioen3iieruz2bvnhsnmzbbi8lr3tzbpvwcycpo9boxiyteyrvvcgsjrbo),
                                         contentDescription = "AB6AXuCFWlW1J4l6ORVW9ks5kYeaWDDRHCxC7BEYmMqr2cqJeHTmSFXHy_BZpZZU28QaQY5hOWA5Xpkpu5ZD4QX3OgRCzHSq93GSbVuXm_3e-krHUBpjScVY6gkdmnr7wg596T2y6xgB8QwB0qn8EDPae--MpFtglCuiNgn-EzObWfE2z-mvana5AMqwxM9QOoFoAiRKzMBVboc0MM_gKyoMEIOEn3IieRuZ2bV-NHsnMzBbI8Lr3TzBpVwcycpo9boxiYTEyrvvcgsjRBo",
                                         alpha = 0.6f,
                                         contentScale = ContentScale.Crop,
@@ -832,11 +745,11 @@ fun Body(
                                                                                                             bottom = 16.dp)
                                     ) {
                                     Column(
-                                        modifier = Modifier.clickable { onHistoryClick() }
+                                        modifier = Modifier
                                                                                 .padding(bottom = 8.dp)
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                                         }
@@ -870,11 +783,11 @@ fun Body(
                                                                                                             bottom = 16.dp)
                                     ) {
                                     Column(
-                                        modifier = Modifier.clickable { onProfilesClick() }
+                                        modifier = Modifier
                                                                                 .padding(bottom = 8.dp)
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                                         }
@@ -912,7 +825,7 @@ fun Body(
                                                                                 .padding(bottom = 8.dp)
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                                         }
@@ -944,11 +857,11 @@ fun Body(
                                                                                                             vertical = 16.dp)
                                     ) {
                                     Column(
-                                        modifier = Modifier.clickable { onScheduleClick() }
+                                        modifier = Modifier
                                                                                 .padding(bottom = 8.dp)
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                                         }
@@ -982,11 +895,11 @@ fun Body(
                                                                                                             bottom = 16.dp)
                                     ) {
                                     Column(
-                                        modifier = Modifier.clickable { onMonitorClick() }
+                                        modifier = Modifier
                                                                                 .padding(bottom = 8.dp)
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                                         }
@@ -994,8 +907,8 @@ fun Body(
                                         horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                         Text(
-                                            text = if (isMonitorRunning) "STOP MONITOR" else "MONITOR",
-                                            color = if (isMonitorRunning) Color(0xff8eff71) else Color(0xffa8abb1),
+                                            text = "MONITOR",
+                                            color = Color(0xffa8abb1),
                                             textAlign = TextAlign.Center,
                                             lineHeight = 1.5.em,
                                             style = TextStyle(
@@ -1020,11 +933,11 @@ fun Body(
                                                                                                             bottom = 16.dp)
                                     ) {
                                     Column(
-                                        modifier = Modifier.clickable { onExportClick() }
+                                        modifier = Modifier
                                                                                 .padding(bottom = 8.dp)
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                                         }
@@ -1058,11 +971,11 @@ fun Body(
                                                                                                             bottom = 16.dp)
                                     ) {
                                     Column(
-                                        modifier = Modifier.clickable { onVendorMacClick() }
+                                        modifier = Modifier
                                                                                 .padding(bottom = 8.dp)
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                                         }
@@ -1094,11 +1007,11 @@ fun Body(
                                                                                                             vertical = 16.dp)
                                     ) {
                                     Column(
-                                        modifier = Modifier.clickable { onSsidMacClick() }
+                                        modifier = Modifier
                                                                                 .padding(bottom = 8.dp)
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                                         }
@@ -1130,11 +1043,11 @@ fun Body(
                                                                                                             vertical = 16.dp)
                                     ) {
                                     Column(
-                                        modifier = Modifier.clickable { onNetScanClick() }
+                                        modifier = Modifier
                                                                                 .padding(bottom = 8.dp)
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                                         }
@@ -1159,7 +1072,7 @@ fun Body(
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(6.64.dp, Alignment.Start),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.clickable { onBootMacClick() }
+                                    modifier = Modifier
                                                                         .fillMaxHeight()
                                                                         .requiredWidth(width = 111.dp)
                                                                         .clip(shape = RoundedCornerShape(8.dp))
@@ -1247,11 +1160,11 @@ fun Body(
                                                                                                             bottom = 16.dp)
                                     ) {
                                     Column(
-                                        modifier = Modifier.clickable { onCopyMacClick() }
+                                        modifier = Modifier
                                                                                 .padding(bottom = 8.dp)
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                                         }
@@ -1298,7 +1211,7 @@ fun Body(
                                         verticalAlignment = Alignment.CenterVertically
                                         ) {
                                         Image(
-                                            painter = painterResource(id = R.drawable.ic_icon),
+                                            painter = painterResource(id = R.drawable.container),
                                             contentDescription = "Container",
                                             colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                                         Column() {
@@ -1636,7 +1549,7 @@ fun Body(
                                                             shape = RoundedCornerShape(8.dp))
                     ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_icon),
+                        painter = painterResource(id = R.drawable.container),
                         contentDescription = "Container",
                         colorFilter = ColorFilter.tint(Color(0xff00d1ff)))
                     Column(
@@ -1663,7 +1576,7 @@ fun Body(
                                         .padding(all = 12.dp)
                     ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_icon),
+                        painter = painterResource(id = R.drawable.container),
                         contentDescription = "Container",
                         colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                     Column(
@@ -1690,7 +1603,7 @@ fun Body(
                                         .padding(all = 12.dp)
                     ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_icon),
+                        painter = painterResource(id = R.drawable.container),
                         contentDescription = "Container",
                         colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                     Column(
@@ -1717,7 +1630,7 @@ fun Body(
                                         .padding(all = 12.dp)
                     ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_icon),
+                        painter = painterResource(id = R.drawable.container),
                         contentDescription = "Container",
                         colorFilter = ColorFilter.tint(Color(0xffa8abb1)))
                     Column(
@@ -1747,132 +1660,3 @@ fun Body(
 private fun BodyPreview() {
     Body(Modifier)
  }
-
-@Composable
-fun TopNavigationDrawerShellComponent(
-    modifier: Modifier = Modifier,
-    onItemClick: (String) -> Unit = {}
-) {
-    ModalDrawerSheet(
-        drawerContainerColor = Color(0xff0b0f13),
-        drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
-        modifier = modifier.requiredWidth(300.dp)
-            .border(
-                border = BorderStroke(1.dp, Brush.verticalGradient(listOf(Color(0xff44484d).copy(alpha = 0.3f), Color.Transparent))),
-                shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
-            )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp)
-        ) {
-            // Header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 40.dp)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            listOf(Color(0xff00d1ff).copy(alpha = 0.05f), Color.Transparent)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .border(
-                        BorderStroke(1.dp, Color(0xff00d1ff).copy(alpha = 0.1f)),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .padding(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xff21262c))
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_nav_profile),
-                        contentDescription = "Profile",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                Column(modifier = Modifier.padding(start = 16.dp)) {
-                    Text(
-                        text = "COMMANDER_01",
-                        color = Color(0xff00d1ff),
-                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    )
-                    Text(
-                        text = "Root Access Granted",
-                        color = Color(0xff8eff71),
-                        style = TextStyle(fontSize = 12.sp)
-                    )
-                }
-            }
-
-            // Menu Items
-            val items = listOf("Interface Manager", "Network Scanner", "MAC Database", "Automation", "Global Settings")
-            items.forEach { item ->
-                NavigationItem(
-                    text = item,
-                    isSelected = item == "Interface Manager",
-                    onClick = { onItemClick(item) }
-                )
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xff8eff71)))
-                Text(
-                    text = "V4.2.0-STABLE",
-                    color = Color(0xffa8abb1),
-                    style = TextStyle(fontSize = 10.sp, letterSpacing = 1.sp),
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun NavigationItem(
-    text: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        color = if (isSelected) Color(0xff151a1f) else Color.Transparent,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (isSelected) Color(0xff00d1ff).copy(alpha = 0.1f) else Color(0xff21262c))
-                    .padding(7.dp)
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.container),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    colorFilter = ColorFilter.tint(if (isSelected) Color(0xff00d1ff) else Color(0xffa8abb1))
-                )
-            }
-            Text(
-                text = text,
-                color = if (isSelected) Color(0xff00d1ff) else Color(0xffa8abb1),
-                modifier = Modifier.padding(start = 16.dp),
-                style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            )
-        }
-    }
-}
