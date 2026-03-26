@@ -62,28 +62,12 @@ import java.util.concurrent.TimeUnit
  */
 class MainActivity : AppCompatActivity() {
 
-    // ── UI ───────────────────────────────────────────────────────────
-    private lateinit var btnScan: Button
-    private lateinit var btnDetect: Button
-    private lateinit var btnBackup: Button
-    private lateinit var btnChange: Button
-    private lateinit var btnRestore: Button
-    private lateinit var btnRandom: Button
-    private lateinit var btnHistory: Button
-    private lateinit var btnProfiles: Button
-    private lateinit var btnNetInfo: Button
-    private lateinit var btnSchedule: Button
-    private lateinit var btnMonitor: Button
-    private lateinit var btnExport: Button
-    private lateinit var btnVendorMac: Button
-    private lateinit var btnSsidMac: Button
-    private lateinit var btnNetScan: Button
-    private lateinit var btnBootMac: Button
-    private lateinit var btnAutoBackup: Button
-    private lateinit var btnCopyMac: Button
-    private lateinit var etNewMac: EditText
-    private lateinit var tvLog: TextView
-    private lateinit var scrollView: ScrollView
+    // ── State ────────────────────────────────────────────────────────
+    private val targetMacState = androidx.compose.runtime.mutableStateOf("")
+    private val vendorState = androidx.compose.runtime.mutableStateOf("")
+    private val uptimeState = androidx.compose.runtime.mutableStateOf("")
+    private val logState = androidx.compose.runtime.mutableStateOf("")
+
 
     // ── State ────────────────────────────────────────────────────────
     private var macInfoPath: String = ""
@@ -113,18 +97,62 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        // No more bindViews() or setListeners()
+        androidx.activity.compose.setContent {
+            MainScreen(
+                macAddress = targetMacState.value,
+                vendor = vendorState.value,
+                uptime = uptimeState.value,
+                onDetectClick = { detectDevice() },
+                onBackupClick = { confirmBackup() },
+                onChangeMacClick = { confirmChange() },
+                onRestoreClick = { showBackupPicker() },
+                onRandomClick = { generateAndFillRandomMac() },
+                onScanLocationClick = { locateMacFiles() },
+                onHistoryClick = { showHistory() },
+                onProfilesClick = { showProfiles() },
+                onNetworkInfoClick = { showNetworkInfo() },
+                onScheduleClick = { showScheduleDialog() },
+                onMonitorClick = { toggleMonitor() },
+                onExportClick = { exportLog() },
+                onVendorMacClick = { showVendorSpoofDialog() },
+                onSsidMacClick = { showSsidMacDialog() },
+                onNetScanClick = { scanNetwork() },
+                onBootMacClick = { toggleBootMac() },
+                onAutoBackupClick = { toggleAutoBackup() },
+                onCopyMacClick = { copyMacToClipboard() }
+            )
+        }
 
         prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        db = MacHistoryDatabase.getInstance(this)
-
-        bindViews()
+        db = MacHistoryDatabase.getDatabase(this)
+        
         configureSu()
         restoreState()
-        updateToggleButtons()
         checkRootAccess()
-        setListeners()
         requestLocationPermission()
+        refreshInfo()
+    }
+
+    private fun refreshInfo() {
+        lifecycleScope.launch {
+            val mac = readActiveMac()
+            val vendor = OuiDatabase.lookup(mac)
+            val uptime = getSystemUptime()
+            
+            targetMacState.value = mac
+            vendorState.value = vendor
+            uptimeState.value = uptime
+        }
+    }
+
+    private fun getSystemUptime(): String {
+        val uptimeMillis = android.os.SystemClock.elapsedRealtime()
+        val hours = (uptimeMillis / (1000 * 60 * 60)).toInt()
+        val minutes = (uptimeMillis / (1000 * 60) % 60).toInt()
+        val seconds = (uptimeMillis / 1000 % 60).toInt()
+        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
+    }
     }
 
     private fun requestLocationPermission() {
@@ -140,84 +168,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun bindViews() {
-        btnScan = findViewById(R.id.btnScan)
-        btnDetect = findViewById(R.id.btnDetect)
-        btnBackup = findViewById(R.id.btnBackup)
-        btnChange = findViewById(R.id.btnChange)
-        btnRestore = findViewById(R.id.btnRestore)
-        btnRandom = findViewById(R.id.btnRandom)
-        btnHistory = findViewById(R.id.btnHistory)
-        btnProfiles = findViewById(R.id.btnProfiles)
-        btnNetInfo = findViewById(R.id.btnNetInfo)
-        btnSchedule = findViewById(R.id.btnSchedule)
-        btnMonitor = findViewById(R.id.btnMonitor)
-        btnExport = findViewById(R.id.btnExport)
-        btnVendorMac = findViewById(R.id.btnVendorMac)
-        btnSsidMac = findViewById(R.id.btnSsidMac)
-        btnNetScan = findViewById(R.id.btnNetScan)
-        btnBootMac = findViewById(R.id.btnBootMac)
-        btnAutoBackup = findViewById(R.id.btnAutoBackup)
-        btnCopyMac = findViewById(R.id.btnCopyMac)
-        etNewMac = findViewById(R.id.etNewMac)
-        tvLog = findViewById(R.id.tvLog)
-        scrollView = findViewById(R.id.scrollLog)
-    }
-
-    private fun configureSu() {
-        Shell.enableVerboseLogging = BuildConfig.DEBUG
-        Shell.setDefaultBuilder(
-            Shell.Builder.create()
-                .setFlags(Shell.FLAG_REDIRECT_STDERR)
-                .setTimeout(30)
-        )
-    }
-
-    private fun restoreState() {
-        macInfoPath = prefs.getString(KEY_MAC_INFO_PATH, "") ?: ""
-        macCobPath = prefs.getString(KEY_MAC_COB_PATH, "") ?: ""
-        efsPartition = prefs.getString(KEY_EFS_PARTITION, null)
-
-        val savedOriginal = prefs.getString(KEY_ORIGINAL_MAC, null)
-        if (savedOriginal != null) {
-            val vendor = OuiDatabase.lookup(savedOriginal)
-            appendLog("[*] Saved original MAC: $savedOriginal ($vendor)")
-        }
-        if (macInfoPath.isNotEmpty()) {
-            appendLog("[*] Saved MAC path: $macInfoPath")
-        }
-    }
-
-    private fun setListeners() {
-        btnScan.setOnClickListener { locateMacFiles() }
-        btnDetect.setOnClickListener { detectDevice() }
-        btnBackup.setOnClickListener { confirmBackup() }
-        btnChange.setOnClickListener { confirmChange() }
-        btnRestore.setOnClickListener { showBackupPicker() }
-        btnRandom.setOnClickListener { generateAndFillRandomMac() }
-        btnHistory.setOnClickListener { showHistory() }
-        btnProfiles.setOnClickListener { showProfiles() }
-        btnNetInfo.setOnClickListener { showNetworkInfo() }
-        btnSchedule.setOnClickListener { showScheduleDialog() }
-        btnMonitor.setOnClickListener { toggleMonitor() }
-        btnExport.setOnClickListener { exportLog() }
-        btnVendorMac.setOnClickListener { showVendorSpoofDialog() }
-        btnSsidMac.setOnClickListener { showSsidMacDialog() }
-        btnNetScan.setOnClickListener { scanNetwork() }
-        btnBootMac.setOnClickListener { toggleBootMac() }
-        btnAutoBackup.setOnClickListener { toggleAutoBackup() }
-        btnCopyMac.setOnClickListener { copyMacToClipboard() }
-    }
-
     private fun updateToggleButtons() {
-        val bootEnabled = prefs.getBoolean(BootMacReceiver.KEY_BOOT_MAC_ENABLED, false)
-        btnBootMac.text = getString(
-            if (bootEnabled) R.string.boot_mac_enabled else R.string.boot_mac_disabled
-        )
-        val autoBackup = prefs.getBoolean(KEY_AUTO_BACKUP, false)
-        btnAutoBackup.text = getString(
-            if (autoBackup) R.string.auto_backup_enabled else R.string.auto_backup_disabled
-        )
     }
 
     // ── Root check ───────────────────────────────────────────────────
@@ -236,9 +187,9 @@ class MainActivity : AppCompatActivity() {
     // ── Helpers ──────────────────────────────────────────────────────
 
     private fun appendLog(msg: String) {
+        logState.value += "$msg\n"
         runOnUiThread {
-            tvLog.append("$msg\n")
-            scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -348,7 +299,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun generateAndFillRandomMac() {
         val mac = MacChangeWorker.generateRandomMac()
-        etNewMac.setText(mac)
+        targetMacState.value = mac
         appendLog("[*] Generated: $mac (${OuiDatabase.lookup(mac)})")
     }
 
@@ -365,7 +316,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun confirmChange() {
-        val newMac = etNewMac.text.toString().trim()
+        val newMac = targetMacState.value
         if (!isValidMac(newMac)) { appendLog("[!] Invalid MAC. Use XX:XX:XX:XX:XX:XX"); return }
         AlertDialog.Builder(this)
             .setTitle(R.string.confirm_change_title)
@@ -691,7 +642,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSaveProfileDialog() {
-        val mac = etNewMac.text.toString().trim().let {
+        val mac = targetMacState.value.let {
             if (it.isEmpty() || !isValidMac(it)) null else it
         }
 
@@ -1193,7 +1144,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAssignSsidMacDialog(ssid: String) {
-        val mac = etNewMac.text.toString().trim().let {
+        val mac = targetMacState.value.let {
             if (it.isEmpty() || !isValidMac(it)) null else it
         }
 
