@@ -1,10 +1,14 @@
 package com.example.macchanger
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.text.InputType
@@ -15,6 +19,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.work.*
 import com.topjohnwu.superuser.Shell
@@ -118,6 +124,20 @@ class MainActivity : AppCompatActivity() {
         updateToggleButtons()
         checkRootAccess()
         setListeners()
+        requestLocationPermission()
+    }
+
+    private fun requestLocationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                    1001
+                )
+            }
+        }
     }
 
     private fun bindViews() {
@@ -809,46 +829,110 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Feature 12: Network Info ─────────────────────────────────────
+    // ── Feature 12: Network Info (Android API + root fallback) ─────
 
+    /** Convert WifiManager integer IP to dotted string */
+    private fun intToIp(ip: Int): String =
+        "${ip and 0xFF}.${ip shr 8 and 0xFF}.${ip shr 16 and 0xFF}.${ip shr 24 and 0xFF}"
+
+    @Suppress("DEPRECATION")
     private fun showNetworkInfo() {
         appendLog("[*] Fetching network info...")
         lifecycleScope.launch {
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val wifiInfo = wifiManager.connectionInfo
+            val dhcpInfo = wifiManager.dhcpInfo
+
+            // ── MAC (requires root) ──
             val mac = readActiveMac()
             val vendor = OuiDatabase.lookup(mac)
 
-            // SSID
-            val ssid = runSu("dumpsys wifi | grep 'mWifiInfo' | head -1").let { line ->
-                "SSID: ([^,]+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+            // ── SSID (API, needs location permission on Android 8.1+) ──
+            var ssid = wifiInfo?.ssid?.removeSurrounding("\"") ?: ""
+            if (ssid.isEmpty() || ssid == "<unknown ssid>" || ssid == "0x") {
+                // Fallback to root
+                ssid = runSu("dumpsys wifi | grep 'mWifiInfo' | head -1").let { line ->
+                    "SSID: ([^,]+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+                }
             }
 
-            // IP address
-            val ip = runSu("ip addr show wlan0 | grep 'inet '").let { line ->
-                "inet\\s+([0-9.]+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+            // ── IP (API) ──
+            var ip = if (dhcpInfo != null && dhcpInfo.ipAddress != 0) {
+                intToIp(dhcpInfo.ipAddress)
+            } else ""
+            if (ip.isEmpty() || ip == "0.0.0.0") {
+                ip = runSu("ip addr show wlan0 | grep 'inet '").let { line ->
+                    "inet\\s+([0-9.]+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+                }
             }
 
-            // Gateway
-            val gateway = runSu("ip route | grep default | grep wlan0").let { line ->
-                "via\\s+([0-9.]+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+            // ── Gateway (API) ──
+            var gateway = if (dhcpInfo != null && dhcpInfo.gateway != 0) {
+                intToIp(dhcpInfo.gateway)
+            } else ""
+            if (gateway.isEmpty() || gateway == "0.0.0.0") {
+                gateway = runSu("ip route | grep default | grep wlan0").let { line ->
+                    "via\\s+([0-9.]+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+                }
             }
 
-            // DNS
-            val dns = runSu("getprop net.dns1").trim().ifEmpty { "N/A" }
-            val dns2 = runSu("getprop net.dns2").trim().ifEmpty { "N/A" }
-
-            // Link speed
-            val linkSpeed = runSu("iw dev wlan0 link | grep 'tx bitrate'").let { line ->
-                "tx bitrate:\\s+(.+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+            // ── DNS (API on 21+, fallback to root) ──
+            var dns1 = ""
+            var dns2 = ""
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val network = cm.activeNetwork
+                if (network != null) {
+                    val linkProps = cm.getLinkProperties(network)
+                    val dnsServers = linkProps?.dnsServers
+                    if (!dnsServers.isNullOrEmpty()) {
+                        dns1 = dnsServers[0].hostAddress ?: ""
+                        if (dnsServers.size > 1) dns2 = dnsServers[1].hostAddress ?: ""
+                    }
+                }
             }
+            if (dns1.isEmpty()) {
+                dns1 = if (dhcpInfo != null && dhcpInfo.dns1 != 0) intToIp(dhcpInfo.dns1) else ""
+            }
+            if (dns2.isEmpty()) {
+                dns2 = if (dhcpInfo != null && dhcpInfo.dns2 != 0) intToIp(dhcpInfo.dns2) else ""
+            }
+            // Final root fallback
+            if (dns1.isEmpty()) dns1 = runSu("getprop net.dns1").trim()
+            if (dns2.isEmpty()) dns2 = runSu("getprop net.dns2").trim()
+            if (dns1.isEmpty()) dns1 = "N/A"
+            if (dns2.isEmpty()) dns2 = "N/A"
+
+            // ── Speed (API) ──
+            val linkSpeed = if (wifiInfo != null && wifiInfo.linkSpeed > 0) {
+                "${wifiInfo.linkSpeed} Mbps"
+            } else {
+                runSu("iw dev wlan0 link | grep 'tx bitrate'").let { line ->
+                    "tx bitrate:\\s+(.+)".toRegex().find(line)?.groupValues?.get(1) ?: "N/A"
+                }
+            }
+
+            // ── Frequency (API, Android 5.0+) ──
+            val frequency = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
+                && wifiInfo != null && wifiInfo.frequency > 0) {
+                "${wifiInfo.frequency} MHz (${if (wifiInfo.frequency > 4900) "5 GHz" else "2.4 GHz"})"
+            } else "N/A"
+
+            // ── Signal Strength (API) ──
+            val rssi = wifiInfo?.rssi ?: -127
+            val signalLevel = WifiManager.calculateSignalLevel(rssi, 5)
+            val signal = if (rssi > -127) "$rssi dBm ($signalLevel/4)" else "N/A"
 
             val info = buildString {
                 appendLine("── Network Info ──")
-                appendLine("MAC     : $mac ($vendor)")
-                appendLine("SSID    : $ssid")
-                appendLine("IP      : $ip")
-                appendLine("Gateway : $gateway")
-                appendLine("DNS     : $dns / $dns2")
-                appendLine("Speed   : $linkSpeed")
+                appendLine("MAC      : $mac ($vendor)")
+                appendLine("SSID     : $ssid")
+                appendLine("IP       : $ip")
+                appendLine("Gateway  : $gateway")
+                appendLine("DNS      : $dns1 / $dns2")
+                appendLine("Speed    : $linkSpeed")
+                appendLine("Frequency: $frequency")
+                appendLine("Signal   : $signal")
                 appendLine("── End ──")
             }
 
