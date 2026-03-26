@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.ContentScale.Crop
+import androidx.compose.ui.layout.ContentScale.Companion.Crop
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -54,7 +54,8 @@ fun MainScreen(
     onNetScanClick: () -> Unit = {},
     onBootMacClick: () -> Unit = {},
     onAutoBackupClick: () -> Unit = {},
-    onCopyMacClick: () -> Unit = {}
+    onCopyMacClick: () -> Unit = {},
+    isMonitorRunning: Boolean = false
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -98,7 +99,8 @@ fun MainScreen(
             onNetScanClick = onNetScanClick,
             onBootMacClick = onBootMacClick,
             onAutoBackupClick = onAutoBackupClick,
-            onCopyMacClick = onCopyMacClick
+            onCopyMacClick = onCopyMacClick,
+            isMonitorRunning = isMonitorRunning
         )
     }
 }
@@ -127,7 +129,8 @@ fun Body(
     onNetScanClick: () -> Unit = {},
     onBootMacClick: () -> Unit = {},
     onAutoBackupClick: () -> Unit = {},
-    onCopyMacClick: () -> Unit = {}
+    onCopyMacClick: () -> Unit = {},
+    isMonitorRunning: Boolean = false
 ) {
     Column(
         modifier = modifier
@@ -991,8 +994,8 @@ fun Body(
                                         horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                         Text(
-                                            text = "MONITOR",
-                                            color = Color(0xffa8abb1),
+                                            text = if (isMonitorRunning) "STOP MONITOR" else "MONITOR",
+                                            color = if (isMonitorRunning) Color(0xff8eff71) else Color(0xffa8abb1),
                                             textAlign = TextAlign.Center,
                                             lineHeight = 1.5.em,
                                             style = TextStyle(

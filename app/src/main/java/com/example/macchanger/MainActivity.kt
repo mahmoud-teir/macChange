@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.DialogInterface
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
@@ -12,11 +13,9 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.text.InputType
-import android.widget.Button
-import android.widget.EditText
-import android.widget.ScrollView
-import android.widget.TextView
 import android.widget.Toast
+import android.widget.EditText
+import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -24,15 +23,19 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.work.*
 import com.topjohnwu.superuser.Shell
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
@@ -67,13 +70,13 @@ class MainActivity : AppCompatActivity() {
     private val vendorState = androidx.compose.runtime.mutableStateOf("")
     private val uptimeState = androidx.compose.runtime.mutableStateOf("")
     private val logState = androidx.compose.runtime.mutableStateOf("")
+    private val monitorRunningState = androidx.compose.runtime.mutableStateOf(false)
 
 
     // ── State ────────────────────────────────────────────────────────
     private var macInfoPath: String = ""
     private var macCobPath: String = ""
     private var efsPartition: String? = null
-    private var monitorRunning = false
     private lateinit var prefs: SharedPreferences
     private lateinit var db: MacHistoryDatabase
 
@@ -98,40 +101,49 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // No more bindViews() or setListeners()
-        androidx.activity.compose.setContent {
-            MainScreen(
-                macAddress = targetMacState.value,
-                vendor = vendorState.value,
-                uptime = uptimeState.value,
-                onDetectClick = { detectDevice() },
-                onBackupClick = { confirmBackup() },
-                onChangeMacClick = { confirmChange() },
-                onRestoreClick = { showBackupPicker() },
-                onRandomClick = { generateAndFillRandomMac() },
-                onScanLocationClick = { locateMacFiles() },
-                onHistoryClick = { showHistory() },
-                onProfilesClick = { showProfiles() },
-                onNetworkInfoClick = { showNetworkInfo() },
-                onScheduleClick = { showScheduleDialog() },
-                onMonitorClick = { toggleMonitor() },
-                onExportClick = { exportLog() },
-                onVendorMacClick = { showVendorSpoofDialog() },
-                onSsidMacClick = { showSsidMacDialog() },
-                onNetScanClick = { scanNetwork() },
-                onBootMacClick = { toggleBootMac() },
-                onAutoBackupClick = { toggleAutoBackup() },
-                onCopyMacClick = { copyMacToClipboard() }
-            )
+        setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                MainScreen(
+                    macAddress = targetMacState.value,
+                    vendor = vendorState.value,
+                    uptime = uptimeState.value,
+                    onDetectClick = { detectDevice() },
+                    onBackupClick = { confirmBackup() },
+                    onChangeMacClick = { confirmChange() },
+                    onRestoreClick = { showBackupPicker() },
+                    onRandomClick = { generateAndFillRandomMac() },
+                    onScanLocationClick = { locateMacFiles() },
+                    onHistoryClick = { showHistory() },
+                    onProfilesClick = { showProfiles() },
+                    onNetworkInfoClick = { showNetworkInfo() },
+                    onScheduleClick = { showScheduleDialog() },
+                    onMonitorClick = { toggleMonitor() },
+                    onExportClick = { exportLog() },
+                    onVendorMacClick = { showVendorSpoofDialog() },
+                    onSsidMacClick = { showSsidMacDialog() },
+                    onNetScanClick = { scanNetwork() },
+                    onBootMacClick = { toggleBootMac() },
+                    onAutoBackupClick = { toggleAutoBackup() },
+                    onCopyMacClick = { copyMacToClipboard() },
+                    isMonitorRunning = monitorRunningState.value
+                )
+            }
         }
 
         prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        db = MacHistoryDatabase.getDatabase(this)
+        db = MacHistoryDatabase.getInstance(this)
         
         configureSu()
-        restoreState()
         checkRootAccess()
         requestLocationPermission()
         refreshInfo()
+    }
+
+    private fun configureSu() {
+        // Redirection must be done before the shell is created
+        Shell.setDefaultBuilder(Shell.Builder.create()
+            .setFlags(Shell.FLAG_REDIRECT_STDERR)
+            .setTimeout(10))
     }
 
     private fun refreshInfo() {
@@ -152,7 +164,6 @@ class MainActivity : AppCompatActivity() {
         val minutes = (uptimeMillis / (1000 * 60) % 60).toInt()
         val seconds = (uptimeMillis / 1000 % 60).toInt()
         return String.format("%02d:%02d:%02d", hours, minutes, seconds)
-    }
     }
 
     private fun requestLocationPermission() {
@@ -202,8 +213,16 @@ class MainActivity : AppCompatActivity() {
     private fun isValidMac(mac: String): Boolean =
         "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$".toRegex().matches(mac)
 
+    private suspend fun getActiveWifiInterface(): String {
+        val output = runSu("ip link | grep -E 'wlan|wifi' | cut -d':' -f2 | awk '{print $1}'").trim()
+        val interfaces = output.split("\n").filter { it.isNotBlank() }
+        if (interfaces.isNotEmpty()) return interfaces[0]
+        return "wlan0" // Fallback
+    }
+
     private suspend fun readActiveMac(): String {
-        val output = runSu("ip link show wlan0")
+        val iface = getActiveWifiInterface()
+        val output = runSu("ip link show $iface")
         val match = "link/ether\\s+([0-9A-Fa-f:]{17})".toRegex().find(output)
         return match?.groupValues?.get(1)?.uppercase() ?: "unknown"
     }
@@ -310,7 +329,7 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.confirm_backup_title)
             .setMessage(R.string.confirm_backup_msg)
-            .setPositiveButton(R.string.confirm_yes) { _, _ -> backupEfs() }
+            .setPositiveButton(R.string.confirm_yes) { _: DialogInterface, _: Int -> backupEfs() }
             .setNegativeButton(R.string.confirm_no, null)
             .show()
     }
@@ -321,7 +340,7 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.confirm_change_title)
             .setMessage(getString(R.string.confirm_change_msg, newMac))
-            .setPositiveButton(R.string.confirm_yes) { _, _ -> changeMac(newMac) }
+            .setPositiveButton(R.string.confirm_yes) { _: DialogInterface, _: Int -> changeMac(newMac) }
             .setNegativeButton(R.string.confirm_no, null)
             .show()
     }
@@ -330,7 +349,7 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.confirm_restore_title)
             .setMessage(getString(R.string.confirm_restore_msg, filePath))
-            .setPositiveButton(R.string.confirm_yes) { _, _ -> restoreEfs(filePath) }
+            .setPositiveButton(R.string.confirm_yes) { _: DialogInterface, _: Int -> restoreEfs(filePath) }
             .setNegativeButton(R.string.confirm_no, null)
             .show()
     }
@@ -484,11 +503,12 @@ class MainActivity : AppCompatActivity() {
             runSu("sleep 1")
 
             // Set MAC directly on the interface
-            val ipLinkResult = runSu("ip link set wlan0 down && ip link set wlan0 address $newMac && ip link set wlan0 up")
+            val iface = getActiveWifiInterface()
+            val ipLinkResult = runSu("ip link set dev $iface down && ip link set dev $iface address $newMac && ip link set dev $iface up")
             if (ipLinkResult.startsWith("ERROR")) {
                 appendLog("[!] ip link set failed: $ipLinkResult")
             } else {
-                appendLog("[+] ip link set wlan0 address $newMac — OK")
+                appendLog("[+] ip link set $iface address $newMac — OK")
             }
 
             // Clear WiFi caches (helps on most devices)
@@ -535,7 +555,7 @@ class MainActivity : AppCompatActivity() {
             appendLog("[*] Saved to history.")
 
             // Update monitor notification if running
-            if (monitorRunning) {
+            if (monitorRunningState.value) {
                 startMonitorService(macAfter)
             }
         }
@@ -633,8 +653,8 @@ class MainActivity : AppCompatActivity() {
                             showProfileActions(profile)
                         }
                     }
-                    .setPositiveButton(R.string.export_profiles) { _, _ -> exportProfiles() }
-                    .setNeutralButton(R.string.import_profiles) { _, _ -> importProfiles() }
+                    .setPositiveButton(R.string.export_profiles) { _: DialogInterface, _: Int -> exportProfiles() }
+                    .setNeutralButton(R.string.import_profiles) { _: DialogInterface, _: Int -> importProfiles() }
                     .setNegativeButton(R.string.confirm_no, null)
                     .show()
             }
@@ -654,8 +674,8 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.save_profile)
             .setMessage("MAC: ${mac ?: "(enter a MAC first)"}")
-            .setView(input)
-            .setPositiveButton("Save") { _, _ ->
+            .setView(input as android.view.View)
+            .setPositiveButton("Save") { _: DialogInterface, _: Int ->
                 val name = input.text.toString().trim()
                 if (name.isEmpty()) { appendLog("[!] Profile name cannot be empty."); return@setPositiveButton }
                 if (mac == null) { appendLog("[!] Enter a valid MAC first."); return@setPositiveButton }
@@ -674,11 +694,11 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(profile.name)
             .setMessage("MAC: ${profile.macAddress}\nCreated: ${profile.formattedTime()}")
-            .setPositiveButton(R.string.apply) { _, _ ->
-                etNewMac.setText(profile.macAddress)
+            .setPositiveButton(R.string.apply) { _: DialogInterface, _: Int ->
+                targetMacState.value = profile.macAddress
                 appendLog("[*] Profile '${profile.name}' loaded: ${profile.macAddress}")
             }
-            .setNeutralButton(R.string.delete) { _, _ ->
+            .setNeutralButton(R.string.delete) { _: DialogInterface, _: Int ->
                 lifecycleScope.launch {
                     withContext(Dispatchers.IO) { db.macProfileDao().delete(profile) }
                     appendLog("[*] Profile '${profile.name}' deleted.")
@@ -894,17 +914,15 @@ class MainActivity : AppCompatActivity() {
     // ── Feature 9/13: Monitor Service (leak detection + notification) ─
 
     private fun toggleMonitor() {
-        if (monitorRunning) {
+        if (monitorRunningState.value) {
             stopService(Intent(this, MacMonitorService::class.java))
-            monitorRunning = false
-            btnMonitor.text = getString(R.string.monitor_toggle)
+            monitorRunningState.value = false
             appendLog("[*] Monitor stopped.")
         } else {
             lifecycleScope.launch {
                 val mac = readActiveMac()
                 startMonitorService(mac)
-                monitorRunning = true
-                btnMonitor.text = "Stop Monitor"
+                monitorRunningState.value = true
                 appendLog("[+] Monitor started. Checking MAC every 60s.")
                 appendLog("    Persistent notification active.")
                 appendLog("    Leak detection: alerts if original MAC reappears.")
@@ -935,15 +953,15 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.schedule_title)
             .setMessage(R.string.schedule_msg)
-            .setView(input)
-            .setPositiveButton(R.string.schedule_start) { _, _ ->
+            .setView(input as android.view.View)
+            .setPositiveButton(R.string.schedule_start) { _: DialogInterface, _: Int ->
                 val minutes = input.text.toString().toLongOrNull()
                 if (minutes == null || minutes < 15 || minutes > 1440) {
                     appendLog("[!] Invalid interval (15-1440)."); return@setPositiveButton
                 }
                 scheduleAutoChange(minutes)
             }
-            .setNeutralButton(R.string.stop_schedule) { _, _ ->
+            .setNeutralButton(R.string.stop_schedule) { _: DialogInterface, _: Int ->
                 workManager.cancelAllWorkByTag(WORK_TAG)
                 appendLog("[*] Schedule stopped.")
             }
@@ -1033,7 +1051,7 @@ class MainActivity : AppCompatActivity() {
                 val vendor = vendors[which]
                 val mac = OuiDatabase.generateMacForVendor(vendor)
                 if (mac != null) {
-                    etNewMac.setText(mac)
+                    targetMacState.value = mac
                     appendLog("[*] Generated $vendor MAC: $mac")
                 } else {
                     appendLog("[!] No OUI data for $vendor")
@@ -1048,8 +1066,8 @@ class MainActivity : AppCompatActivity() {
     private fun scanNetwork() {
         appendLog("[*] Scanning network...")
         lifecycleScope.launch {
-            // Ping broadcast to populate ARP table
-            val gateway = runSu("ip route | grep default | grep wlan0").let { line ->
+            val iface = getActiveWifiInterface()
+            val gateway = runSu("ip route | grep default | grep $iface").let { line ->
                 "via\\s+([0-9.]+)".toRegex().find(line)?.groupValues?.get(1)
             }
 
@@ -1068,7 +1086,7 @@ class MainActivity : AppCompatActivity() {
             runSu("for i in \$(seq 1 254); do ping -c 1 -W 1 $subnet.\$i > /dev/null 2>&1 & done; wait")
 
             // Read ARP table
-            val arpOutput = runSu("ip neigh show dev wlan0")
+            val arpOutput = runSu("ip neigh show dev $iface")
             val devices = arpOutput.lines()
                 .filter { it.contains("lladdr") }
                 .mapNotNull { line ->
@@ -1103,7 +1121,7 @@ class MainActivity : AppCompatActivity() {
                     .setTitle("${devices.size} Device(s) Found — Tap to Clone MAC")
                     .setItems(items) { _, which ->
                         val clonedMac = devices[which].second
-                        etNewMac.setText(clonedMac)
+                        targetMacState.value = clonedMac
                         appendLog("[*] Cloned MAC from ${devices[which].first}: $clonedMac")
                     }
                     .setNegativeButton(R.string.confirm_no, null)
@@ -1199,11 +1217,11 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(mapping.ssid)
             .setMessage("Assigned MAC: ${mapping.macAddress}\nVendor: ${OuiDatabase.lookup(mapping.macAddress)}")
-            .setPositiveButton(R.string.apply) { _, _ ->
-                etNewMac.setText(mapping.macAddress)
+            .setPositiveButton(R.string.apply) { _: DialogInterface, _: Int ->
+                targetMacState.value = mapping.macAddress
                 appendLog("[*] Loaded MAC for '${mapping.ssid}': ${mapping.macAddress}")
             }
-            .setNeutralButton(R.string.delete) { _, _ ->
+            .setNeutralButton(R.string.delete) { _: DialogInterface, _: Int ->
                 lifecycleScope.launch {
                     withContext(Dispatchers.IO) { db.ssidMacMappingDao().delete(mapping) }
                     appendLog("[*] SSID mapping deleted: '${mapping.ssid}'")
@@ -1216,7 +1234,7 @@ class MainActivity : AppCompatActivity() {
     // ── Export log ───────────────────────────────────────────────────
 
     private fun exportLog() {
-        val logText = tvLog.text.toString()
+        val logText = logState.value
         if (logText.isBlank()) { appendLog("[!] Nothing to export."); return }
 
         val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
