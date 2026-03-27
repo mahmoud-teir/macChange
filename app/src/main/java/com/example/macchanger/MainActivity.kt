@@ -67,6 +67,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnDetect: Button
     private lateinit var btnBackup: Button
     private lateinit var btnChange: Button
+    private lateinit var btnMethod: Button
     private lateinit var btnRestore: Button
     private lateinit var btnRandom: Button
     private lateinit var btnHistory: Button
@@ -81,6 +82,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnBootMac: Button
     private lateinit var btnAutoBackup: Button
     private lateinit var btnCopyMac: Button
+    private lateinit var btnRepeater: Button
     private lateinit var etNewMac: EditText
     private lateinit var tvLog: TextView
     private lateinit var scrollView: ScrollView
@@ -89,6 +91,7 @@ class MainActivity : AppCompatActivity() {
     private var macInfoPath: String = ""
     private var macCobPath: String = ""
     private var efsPartition: String? = null
+    private var selectedMethod: String = "Auto"
     private var monitorRunning = false
     private lateinit var prefs: SharedPreferences
     private lateinit var db: MacHistoryDatabase
@@ -105,6 +108,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_ORIGINAL_MAC = "original_mac"
         private const val KEY_MAC_INFO_PATH = "mac_info_path"
         private const val KEY_MAC_COB_PATH = "mac_cob_path"
+        private const val KEY_SELECTED_METHOD = "selected_method"
         private const val KEY_EFS_PARTITION = "efs_partition"
         private const val KEY_AUTO_BACKUP = "auto_backup_enabled"
     }
@@ -145,6 +149,7 @@ class MainActivity : AppCompatActivity() {
         btnDetect = findViewById(R.id.btnDetect)
         btnBackup = findViewById(R.id.btnBackup)
         btnChange = findViewById(R.id.btnChange)
+        btnMethod = findViewById(R.id.btnMethod)
         btnRestore = findViewById(R.id.btnRestore)
         btnRandom = findViewById(R.id.btnRandom)
         btnHistory = findViewById(R.id.btnHistory)
@@ -159,9 +164,16 @@ class MainActivity : AppCompatActivity() {
         btnBootMac = findViewById(R.id.btnBootMac)
         btnAutoBackup = findViewById(R.id.btnAutoBackup)
         btnCopyMac = findViewById(R.id.btnCopyMac)
+        btnRepeater = findViewById(R.id.btnRepeater)
         etNewMac = findViewById(R.id.etNewMac)
         tvLog = findViewById(R.id.tvLog)
         scrollView = findViewById(R.id.scrollLog)
+
+        // Allow inner log ScrollView to scroll freely inside the outer page ScrollView
+        scrollView.setOnTouchListener { v, _ ->
+            v.parent.requestDisallowInterceptTouchEvent(true)
+            false
+        }
     }
 
     private fun configureSu() {
@@ -176,6 +188,8 @@ class MainActivity : AppCompatActivity() {
         macInfoPath = prefs.getString(KEY_MAC_INFO_PATH, "") ?: ""
         macCobPath = prefs.getString(KEY_MAC_COB_PATH, "") ?: ""
         efsPartition = prefs.getString(KEY_EFS_PARTITION, null)
+        selectedMethod = prefs.getString(KEY_SELECTED_METHOD, "Auto") ?: "Auto"
+        btnMethod.text = "Method: $selectedMethod"
 
         val savedOriginal = prefs.getString(KEY_ORIGINAL_MAC, null)
         if (savedOriginal != null) {
@@ -192,6 +206,7 @@ class MainActivity : AppCompatActivity() {
         btnDetect.setOnClickListener { detectDevice() }
         btnBackup.setOnClickListener { confirmBackup() }
         btnChange.setOnClickListener { confirmChange() }
+        btnMethod.setOnClickListener { showMethodDialog() }
         btnRestore.setOnClickListener { showBackupPicker() }
         btnRandom.setOnClickListener { generateAndFillRandomMac() }
         btnHistory.setOnClickListener { showHistory() }
@@ -206,6 +221,7 @@ class MainActivity : AppCompatActivity() {
         btnBootMac.setOnClickListener { toggleBootMac() }
         btnAutoBackup.setOnClickListener { toggleAutoBackup() }
         btnCopyMac.setOnClickListener { copyMacToClipboard() }
+        btnRepeater.setOnClickListener { toggleRepeater() }
     }
 
     private fun updateToggleButtons() {
@@ -245,6 +261,35 @@ class MainActivity : AppCompatActivity() {
         val result = Shell.cmd(cmd).exec()
         if (result.isSuccess) result.out.joinToString("\n")
         else "ERROR: ${result.err.joinToString("\n")}"
+    }
+
+    /**
+     * Read MAC address from a file, handling binary content.
+     * Tries to extract a valid XX:XX:XX:XX:XX:XX pattern from the file.
+     * Falls back to stripping non-printable chars if no pattern found.
+     */
+    private suspend fun readMacFromFile(path: String): String {
+        val raw = runSu("cat $path").trim()
+
+        // Try to find a valid MAC pattern in the output
+        val macPattern = "([0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2})".toRegex()
+        val match = macPattern.find(raw)
+        if (match != null) return match.value.uppercase()
+
+        // Some files store MAC without colons (e.g. "AABBCCDDEEFF")
+        val rawHex = raw.replace(Regex("[^0-9A-Fa-f]"), "")
+        if (rawHex.length >= 12) {
+            val hex = rawHex.substring(0, 12)
+            return hex.chunked(2).joinToString(":").uppercase()
+        }
+
+        // Try reading as hex dump
+        val hexDump = runSu("xxd -l 6 -p $path").trim().replace(Regex("[^0-9A-Fa-f]"), "")
+        if (hexDump.length >= 12) {
+            return hexDump.substring(0, 12).chunked(2).joinToString(":").uppercase()
+        }
+
+        return raw.filter { it.isLetterOrDigit() || it == ':' || it == '.' }.take(17).ifEmpty { "unknown" }
     }
 
     private fun isValidMac(mac: String): Boolean =
@@ -287,7 +332,7 @@ class MainActivity : AppCompatActivity() {
                         .apply()
 
                     appendLog("[+] Auto-detected MAC path: $macInfoPath")
-                    val mac = runSu("cat $macInfoPath").trim()
+                    val mac = readMacFromFile(macInfoPath)
                     appendLog("[*] MAC in file: $mac (${OuiDatabase.lookup(mac)})")
 
                     // Save original on first detect
@@ -325,7 +370,7 @@ class MainActivity : AppCompatActivity() {
                     .apply()
 
                 appendLog("[+] Found: $macInfoPath")
-                val fileMac = runSu("cat $macInfoPath").trim()
+                val fileMac = readMacFromFile(macInfoPath)
                 val vendor = OuiDatabase.lookup(fileMac)
                 appendLog("[*] MAC in file : $fileMac ($vendor)")
 
@@ -359,6 +404,22 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.confirm_backup_title)
             .setMessage(R.string.confirm_backup_msg)
             .setPositiveButton(R.string.confirm_yes) { _, _ -> backupEfs() }
+            .setNegativeButton(R.string.confirm_no, null)
+            .show()
+    }
+
+    private fun showMethodDialog() {
+        val methods = arrayOf("Auto", "EFS/File", "IP Link", "Ifconfig")
+        val checkedItem = methods.indexOf(selectedMethod).takeIf { it >= 0 } ?: 0
+        AlertDialog.Builder(this)
+            .setTitle("Select Change Method")
+            .setSingleChoiceItems(methods, checkedItem) { dialog, which ->
+                selectedMethod = methods[which]
+                btnMethod.text = "Method: $selectedMethod"
+                prefs.edit().putString(KEY_SELECTED_METHOD, selectedMethod).apply()
+                appendLog("[*] Selected method: $selectedMethod")
+                dialog.dismiss()
+            }
             .setNegativeButton(R.string.confirm_no, null)
             .show()
     }
@@ -485,10 +546,14 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            appendLog("[*] Changing MAC to $newMac ...")
+            appendLog("[*] Changing MAC to $newMac (Method: $selectedMethod) ...")
+
+            val useFile = selectedMethod == "Auto" || selectedMethod == "EFS/File"
+            val useIpLink = selectedMethod == "Auto" || selectedMethod == "IP Link"
+            val useIfconfig = selectedMethod == "Auto" || selectedMethod == "Ifconfig"
 
             // ── Method 1: EFS/persist file write (persistent, device-specific) ──
-            val usedFileMethod = if (macInfoPath.isNotEmpty()) {
+            val usedFileMethod = if (useFile && macInfoPath.isNotEmpty()) {
                 appendLog("[*] Method 1: EFS/persist file write")
 
                 val md5Before = md5sum(macInfoPath)
@@ -521,32 +586,125 @@ class MainActivity : AppCompatActivity() {
                 }
                 true
             } else {
-                appendLog("[*] No MAC file path found — skipping file method")
+                if (useFile) appendLog("[*] No MAC file path found — skipping file method")
                 false
             }
 
-            // ── Method 2: Universal ip link set (works on ALL rooted devices) ──
-            appendLog("[*] Method 2: Universal ip link set (works on all devices)")
-            runSu("svc wifi disable")
-            appendLog("> svc wifi disable")
-            runSu("sleep 1")
+            // ── Method 2: Shell commands ──
+            if (useIpLink || useIfconfig) {
+                appendLog("[*] Method 2: Shell commands")
 
-            // Set MAC directly on the interface
-            val ipLinkResult = runSu("ip link set wlan0 down && ip link set wlan0 address $newMac && ip link set wlan0 up")
-            if (ipLinkResult.startsWith("ERROR")) {
-                appendLog("[!] ip link set failed: $ipLinkResult")
-            } else {
-                appendLog("[+] ip link set wlan0 address $newMac — OK")
+                // Set MAC directly on the interface
+                var shellSuccess = false
+
+                // ── Approach A: ip link set (do NOT disable WiFi first — Xiaomi kills wlan0) ──
+                if (useIpLink) {
+                    appendLog("[*] Trying ip link set (interface-level)...")
+
+                    // Step 1: Bring interface down directly
+                    val downResult = runSu("ip link set wlan0 down")
+                    if (downResult.startsWith("ERROR")) {
+                        appendLog("[!] ip link set wlan0 down failed: $downResult")
+                    }
+                    runSu("sleep 1")
+
+                    // Step 2: Change MAC address
+                    val setResult = runSu("ip link set wlan0 address $newMac")
+                    if (setResult.startsWith("ERROR") || setResult.contains("not permitted") || setResult.contains("RTNETLINK")) {
+                        appendLog("[!] ip link set address error: $setResult")
+                    } else {
+                        appendLog("[*] ip link set address command completed")
+                    }
+
+                    // Step 3: Bring interface back up
+                    runSu("ip link set wlan0 up")
+
+                    // Step 4: Verify MAC
+                    val verifyMac = runSu("cat /sys/class/net/wlan0/address").trim().uppercase()
+                    if (verifyMac.equals(newMac, ignoreCase = true)) {
+                        appendLog("[+] ip link set — verified OK ($verifyMac)")
+                        shellSuccess = true
+                    } else {
+                        appendLog("[!] ip link set: MAC unchanged ($verifyMac). Driver rejected.")
+                    }
+
+                    // Step 5: Toggle WiFi to force driver reload
+                    if (shellSuccess) {
+                        appendLog("[*] Toggling WiFi to apply MAC...")
+                        runSu("svc wifi disable")
+                        runSu("sleep 2")
+                        runSu("svc wifi enable")
+                        runSu("sleep 2")
+                    }
+                }
+
+                // ── Approach B: ifconfig (fallback for Xiaomi/MediaTek) ──
+                if (!shellSuccess && (selectedMethod == "Auto" || selectedMethod == "Ifconfig")) {
+                    appendLog("[*] Trying ifconfig hw ether...")
+
+                    // Disable WiFi to cleanly bring down iface
+                    runSu("svc wifi disable")
+                    appendLog("> svc wifi disable")
+                    runSu("sleep 1")
+
+                    // Some Xiaomi devices keep wlan0 alive after svc wifi disable
+                    // but allow ifconfig to change MAC
+                    runSu("ifconfig wlan0 down")
+                    val ifResult = runSu("ifconfig wlan0 hw ether $newMac")
+                    runSu("ifconfig wlan0 up")
+
+                    if (ifResult.startsWith("ERROR") || ifResult.contains("not permitted")) {
+                        appendLog("[!] ifconfig failed: $ifResult")
+                    } else {
+                        val verifyMac2 = runSu("cat /sys/class/net/wlan0/address").trim().uppercase()
+                        if (verifyMac2.equals(newMac, ignoreCase = true)) {
+                            appendLog("[+] ifconfig — verified OK ($verifyMac2)")
+                            shellSuccess = true
+                        } else {
+                            appendLog("[!] ifconfig: MAC unchanged ($verifyMac2).")
+                        }
+                    }
+
+                    // Re-enable WiFi
+                    runSu("svc wifi enable")
+                    appendLog("> svc wifi enable")
+                    runSu("sleep 2")
+                }
+
+                // ── Approach C: ndc/netd interface (last resort for MIUI) ──
+                if (!shellSuccess && selectedMethod == "Auto") {
+                    appendLog("[*] Trying ndc interface method (MIUI fallback)...")
+                    runSu("svc wifi disable")
+                    runSu("sleep 1")
+                    val ndcResult = runSu("ndc interface setcfg wlan0 $newMac")
+                    if (ndcResult.startsWith("ERROR")) {
+                        appendLog("[!] ndc failed: $ndcResult")
+                    } else {
+                        appendLog("[*] ndc command sent")
+                    }
+                    runSu("svc wifi enable")
+                    runSu("sleep 2")
+
+                    val verifyMac3 = runSu("cat /sys/class/net/wlan0/address").trim().uppercase()
+                    if (verifyMac3.equals(newMac, ignoreCase = true)) {
+                        appendLog("[+] ndc — verified OK ($verifyMac3)")
+                        shellSuccess = true
+                    } else {
+                        appendLog("[!] All shell methods failed. MAC unchanged ($verifyMac3).")
+                        appendLog("[!] Your WiFi driver may not support runtime MAC changes.")
+                        appendLog("[*] Try the EFS/File method instead (use Detect Device + File Scan first).")
+                    }
+                }
+
+                // Clear WiFi caches
+                runSu("rm -rf /data/vendor/wifi/wpa/wpa_supplicant.conf 2>/dev/null")
+                runSu("rm -rf /data/misc/wifi/WifiConfigStore.xml 2>/dev/null")
+
+                // Re-enable WiFi
+                runSu("svc wifi enable")
+                appendLog("> svc wifi enable")
+                runSu("sleep 3")
             }
-
-            // Clear WiFi caches (helps on most devices)
-            runSu("rm -rf /data/vendor/wifi/wpa/wpa_supplicant.conf 2>/dev/null")
-            runSu("rm -rf /data/misc/wifi/WifiConfigStore.xml 2>/dev/null")
-
-            // Re-enable WiFi
-            runSu("svc wifi enable")
-            appendLog("> svc wifi enable")
-            runSu("sleep 3")
 
             // Compare results
             val macAfter = readActiveMac()
@@ -1091,17 +1249,125 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    // ── Feature 25: WiFi Repeater ────────────────────────────────────
+
+    private fun toggleRepeater() {
+        if (RepeaterManager.isRunning) {
+            lifecycleScope.launch {
+                RepeaterManager.stop { msg -> appendLog(msg) }
+                runOnUiThread { btnRepeater.text = "Repeater" }
+            }
+        } else {
+            showRepeaterDialog()
+        }
+    }
+
+    private fun showRepeaterDialog() {
+        val dialogLayout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(48, 32, 48, 16)
+        }
+
+        // Label helper
+        fun label(text: String): TextView = TextView(this).apply {
+            this.text = text
+            textSize = 12f
+            setTextColor(resources.getColor(R.color.on_surface_secondary, theme))
+            setPadding(0, 24, 0, 4)
+        }
+
+        // SSID
+        dialogLayout.addView(label("SSID"))
+        val etSsid = EditText(this).apply {
+            hint = "Hotspot name"
+            inputType = InputType.TYPE_CLASS_TEXT
+            setText("MacChanger_AP")
+        }
+        dialogLayout.addView(etSsid)
+
+        // Password (VISIBLE)
+        dialogLayout.addView(label("PASSWORD"))
+        val etPass = EditText(this).apply {
+            hint = "Min 8 chars (empty = open)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            setText("12345678")
+        }
+        dialogLayout.addView(etPass)
+
+        // Band selection
+        dialogLayout.addView(label("BAND"))
+        val bands = arrayOf("2.4 GHz", "5 GHz")
+        val spinnerBand = android.widget.Spinner(this)
+        spinnerBand.adapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, bands)
+        dialogLayout.addView(spinnerBand)
+
+        // Channel
+        dialogLayout.addView(label("CHANNEL"))
+        val etChannel = EditText(this).apply {
+            hint = "e.g. 6 (2.4GHz) or 36 (5GHz)"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setText("6")
+        }
+        dialogLayout.addView(etChannel)
+
+        // Auto-update channel hint when band changes
+        spinnerBand.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, pos: Int, id: Long) {
+                if (pos == 0) { etChannel.setText("6"); etChannel.hint = "1-13 (2.4GHz)" }
+                else { etChannel.setText("36"); etChannel.hint = "36,40,44,48 (5GHz)" }
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("WiFi Repeater")
+            .setMessage("Share your WiFi as a hotspot.\n⚠ Requires chipset STA+AP support.")
+            .setView(dialogLayout)
+            .setPositiveButton("Start") { _, _ ->
+                val ssid = etSsid.text.toString().trim()
+                val pass = etPass.text.toString().trim()
+                val channel = etChannel.text.toString().trim().toIntOrNull() ?: 6
+                val band = if (spinnerBand.selectedItemPosition == 1) "5GHz" else "2.4GHz"
+
+                if (ssid.isEmpty()) {
+                    appendLog("[!] SSID cannot be empty")
+                    return@setPositiveButton
+                }
+                if (pass.isNotEmpty() && pass.length < 8) {
+                    appendLog("[!] Password must be at least 8 characters")
+                    return@setPositiveButton
+                }
+
+                lifecycleScope.launch {
+                    val success = RepeaterManager.start(this@MainActivity, ssid, pass, channel, band) { msg -> appendLog(msg) }
+                    if (success) {
+                        runOnUiThread { btnRepeater.text = "Stop Repeater" }
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     // ── Feature 22: Network Scanner ──────────────────────────────────
 
     private fun scanNetwork() {
         appendLog("[*] Scanning network...")
         lifecycleScope.launch {
             // Ping broadcast to populate ARP table
-            val gateway = runSu("ip route | grep default | grep wlan0").let { line ->
-                "via\\s+([0-9.]+)".toRegex().find(line)?.groupValues?.get(1)
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val dhcpInfo = wifiManager.dhcpInfo
+            var gateway: String? = if (dhcpInfo != null && dhcpInfo.gateway != 0) {
+                intToIp(dhcpInfo.gateway)
+            } else null
+
+            if (gateway == null || gateway == "0.0.0.0") {
+                gateway = runSu("ip route | grep default | grep wlan0").let { line ->
+                    "via\\s+([0-9.]+)".toRegex().find(line)?.groupValues?.get(1)
+                }
             }
 
-            if (gateway == null) {
+            if (gateway == null || gateway == "0.0.0.0" || gateway.isEmpty()) {
                 appendLog("[!] No WiFi gateway found. Are you connected?")
                 return@launch
             }

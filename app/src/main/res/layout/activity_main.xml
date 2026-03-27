@@ -1,264 +1,391 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="12dp">
+    android:background="?attr/colorSurface"
+    android:fillViewport="true">
 
-    <!-- Row 1: Scan | Detect Device -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="4dp">
+        android:orientation="vertical"
+        android:padding="20dp">
 
-        <Button
-            android:id="@+id/btnScan"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/scan_mac_location"
-            android:layout_marginEnd="4dp"/>
-
-        <Button
-            android:id="@+id/btnDetect"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/detect_device"
-            android:layout_marginStart="4dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-    </LinearLayout>
-
-    <!-- Row 2: Backup | Restore -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="4dp">
-
-        <Button
-            android:id="@+id/btnBackup"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/backup_efs"
-            android:layout_marginEnd="4dp"/>
-
-        <Button
-            android:id="@+id/btnRestore"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/restore_backup"
-            android:layout_marginStart="4dp"/>
-    </LinearLayout>
-
-    <!-- Row 3: MAC input + Random -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="4dp">
-
-        <EditText
-            android:id="@+id/etNewMac"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="@string/enter_new_mac"
-            android:inputType="text"
-            android:maxLines="1"
-            android:textSize="14sp"
-            android:layout_marginEnd="4dp"/>
-
-        <Button
-            android:id="@+id/btnRandom"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/random_mac"
-            style="?attr/materialButtonOutlinedStyle"/>
-    </LinearLayout>
-
-    <!-- Row 4: Change MAC -->
-    <Button
-        android:id="@+id/btnChange"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/change_mac"
-        android:layout_marginBottom="4dp"/>
-
-    <!-- Row 5: History | Profiles | Net Info -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="4dp">
-
-        <Button
-            android:id="@+id/btnHistory"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/view_history"
-            android:textSize="11sp"
-            android:layout_marginEnd="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-
-        <Button
-            android:id="@+id/btnProfiles"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/profiles"
-            android:textSize="11sp"
-            android:layout_marginStart="2dp"
-            android:layout_marginEnd="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-
-        <Button
-            android:id="@+id/btnNetInfo"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/network_info"
-            android:textSize="11sp"
-            android:layout_marginStart="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-    </LinearLayout>
-
-    <!-- Row 6: Schedule | Monitor | Export -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="8dp">
-
-        <Button
-            android:id="@+id/btnSchedule"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/schedule_change"
-            android:textSize="11sp"
-            android:layout_marginEnd="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-
-        <Button
-            android:id="@+id/btnMonitor"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/monitor_toggle"
-            android:textSize="11sp"
-            android:layout_marginStart="2dp"
-            android:layout_marginEnd="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-
-        <Button
-            android:id="@+id/btnExport"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/export_log"
-            android:textSize="11sp"
-            android:layout_marginStart="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-    </LinearLayout>
-
-    <!-- Row 7: Vendor MAC | SSID MAC | Net Scan -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="4dp">
-
-        <Button
-            android:id="@+id/btnVendorMac"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/vendor_mac"
-            android:textSize="11sp"
-            android:layout_marginEnd="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-
-        <Button
-            android:id="@+id/btnSsidMac"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/ssid_mac"
-            android:textSize="11sp"
-            android:layout_marginStart="2dp"
-            android:layout_marginEnd="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-
-        <Button
-            android:id="@+id/btnNetScan"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/net_scan"
-            android:textSize="11sp"
-            android:layout_marginStart="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-    </LinearLayout>
-
-    <!-- Row 8: Boot MAC | Auto Backup | Copy MAC -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="8dp">
-
-        <Button
-            android:id="@+id/btnBootMac"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/boot_mac"
-            android:textSize="11sp"
-            android:layout_marginEnd="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-
-        <Button
-            android:id="@+id/btnAutoBackup"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/auto_backup"
-            android:textSize="11sp"
-            android:layout_marginStart="2dp"
-            android:layout_marginEnd="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-
-        <Button
-            android:id="@+id/btnCopyMac"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/copy_mac"
-            android:textSize="11sp"
-            android:layout_marginStart="2dp"
-            style="?attr/materialButtonOutlinedStyle"/>
-    </LinearLayout>
-
-    <!-- Log output -->
-    <ScrollView
-        android:id="@+id/scrollLog"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:background="#F5F5F5">
-
+        <!-- Header -->
         <TextView
-            android:id="@+id/tvLog"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="8dp"
-            android:textSize="11sp"
-            android:typeface="monospace"/>
-    </ScrollView>
+            android:text="MAC CHANGER"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="32sp"
+            android:fontFamily="sans-serif-black"
+            android:letterSpacing="-0.03"
+            android:layout_marginBottom="24dp" />
 
-</LinearLayout>
+        <!-- Well 1: Target Config -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/surface_container"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CONFIGURATION"
+                android:textColor="@color/on_surface_secondary"
+                android:textSize="11sp"
+                android:letterSpacing="0.15"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginBottom="12dp"/>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:hint="@string/enter_new_mac"
+                style="?attr/textInputStyle">
+                
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etNewMac"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:fontFamily="monospace"
+                    android:textSize="16sp"
+                    android:textColor="?attr/colorOnSurface"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                
+                <Button
+                    android:id="@+id/btnRandom"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/random_mac"
+                    android:layout_marginEnd="4dp"
+                    style="?attr/materialButtonOutlinedStyle"/>
+
+                <Button
+                    android:id="@+id/btnVendorMac"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/vendor_mac"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp"
+                    style="?attr/materialButtonOutlinedStyle"/>
+
+                <Button
+                    android:id="@+id/btnCopyMac"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/copy_mac"
+                    android:layout_marginStart="4dp"
+                    style="?attr/materialButtonOutlinedStyle"/>
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Well 2: Execute Action -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@color/surface_container"
+            android:padding="0dp"
+            android:layout_marginBottom="16dp">
+            
+            <Button
+                android:id="@+id/btnChange"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:text="@string/change_mac"
+                android:layout_marginEnd="0dp"/>
+
+            <Button
+                android:id="@+id/btnMethod"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Method"
+                style="@style/Widget.App.Button.Secondary"/>
+            
+        </LinearLayout>
+
+        <!-- Well 3: Network -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/surface_container_low"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="NETWORK"
+                android:textColor="@color/on_surface_secondary"
+                android:textSize="11sp"
+                android:letterSpacing="0.15"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginBottom="12dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/btnSsidMac"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/ssid_mac"
+                    android:layout_marginEnd="4dp"
+                    style="@style/Widget.App.Button.Secondary"/>
+
+                <Button
+                    android:id="@+id/btnNetScan"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/net_scan"
+                    android:layout_marginStart="4dp"
+                    style="@style/Widget.App.Button.Secondary"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnDetect"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/detect_device"
+                    android:layout_marginEnd="4dp"
+                    style="@style/Widget.App.Button.Secondary"/>
+
+                <Button
+                    android:id="@+id/btnScan"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="File Scan"
+                    android:layout_marginStart="4dp"
+                    style="@style/Widget.App.Button.Secondary"/>
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnRepeater"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Repeater"
+                android:layout_marginTop="8dp"
+                style="@style/Widget.App.Button.Secondary"/>
+
+        </LinearLayout>
+
+        <!-- Well 4: Security -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/surface_container_low"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SYSTEM &amp; SAFETY"
+                android:textColor="@color/on_surface_secondary"
+                android:textSize="11sp"
+                android:letterSpacing="0.15"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginBottom="12dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/btnBackup"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/backup_efs"
+                    android:layout_marginEnd="4dp"
+                    style="@style/Widget.App.Button.Outlined"/>
+
+                <Button
+                    android:id="@+id/btnRestore"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/restore_backup"
+                    android:layout_marginStart="4dp"
+                    style="@style/Widget.App.Button.Outlined"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/btnAutoBackup"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Auto Back"
+                    android:layout_marginEnd="4dp"
+                    style="@style/Widget.App.Button.Outlined"/>
+
+                <Button
+                    android:id="@+id/btnBootMac"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Boot MAC"
+                    android:layout_marginStart="4dp"
+                    style="@style/Widget.App.Button.Outlined"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnSchedule"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/schedule_change"
+                    android:layout_marginEnd="4dp"
+                    style="@style/Widget.App.Button.Outlined"/>
+
+                <Button
+                    android:id="@+id/btnMonitor"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Monitor"
+                    android:layout_marginStart="4dp"
+                    style="@style/Widget.App.Button.Outlined"/>
+            </LinearLayout>
+            
+        </LinearLayout>
+
+        <!-- Utility Group -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="24dp">
+
+            <Button
+                android:id="@+id/btnNetInfo"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Net Info"
+                style="@style/Widget.App.Button.Tertiary"/>
+                
+            <Button
+                android:id="@+id/btnProfiles"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/profiles"
+                style="@style/Widget.App.Button.Tertiary"/>
+
+            <Button
+                android:id="@+id/btnHistory"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="History"
+                style="@style/Widget.App.Button.Tertiary"/>
+                
+        </LinearLayout>
+
+        <!-- Log Terminal -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/surface_container_lowest"
+            android:padding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="12dp">
+                
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="TERMINAL LOG"
+                    android:textColor="@color/on_surface_secondary"
+                    android:textSize="11sp"
+                    android:letterSpacing="0.15"
+                    android:fontFamily="sans-serif-medium"/>
+                
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1"/>
+                
+                <Button
+                    android:id="@+id/btnExport"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:text="Export"
+                    android:textSize="11sp"
+                    style="@style/Widget.App.Button.Outlined"/>
+            </LinearLayout>
+
+            <ScrollView
+                android:id="@+id/scrollLog"
+                android:layout_width="match_parent"
+                android:layout_height="300dp"
+                android:fillViewport="true"
+                android:nestedScrollingEnabled="true"
+                android:isScrollContainer="true">
+
+                <TextView
+                    android:id="@+id/tvLog"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:textColor="@color/primary"
+                    android:fontFamily="monospace"
+                    android:textIsSelectable="true"
+                    android:lineSpacingExtra="4dp"/>
+            </ScrollView>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>
