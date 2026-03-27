@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.ContentScale.Crop
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -679,7 +678,7 @@ fun Body(modifier: Modifier = Modifier) {
                                                                         .padding(all = 12.dp)
                                     ) {
                                     Image(
-                                        painter = painterResource(id = R.drawable.ab6axucfwlw1j4l6orvw9ks5kyeawddrhcxc7beymmqr2cqjehtmsfxhy_bzpzzu28qaqy5howa5xpkpu5zd4qx3ogrczhsq93gsbvuxm_3ekrhubpjscvy6gkdmnr7wg596t2y6xgb8qwb0qn8edpaempftglcuingnezobwfe2zmvana5amqwxm9qoofoairkzmbvboc0mm_gkyomeioen3iieruz2bvnhsnmzbbi8lr3tzbpvwcycpo9boxiyteyrvvcgsjrbo),
+                                        painter = painterResource(id = R.drawable.ic_icon),
                                         contentDescription = "AB6AXuCFWlW1J4l6ORVW9ks5kYeaWDDRHCxC7BEYmMqr2cqJeHTmSFXHy_BZpZZU28QaQY5hOWA5Xpkpu5ZD4QX3OgRCzHSq93GSbVuXm_3e-krHUBpjScVY6gkdmnr7wg596T2y6xgB8QwB0qn8EDPae--MpFtglCuiNgn-EzObWfE2z-mvana5AMqwxM9QOoFoAiRKzMBVboc0MM_gKyoMEIOEn3IieRuZ2bV-NHsnMzBbI8Lr3TzBpVwcycpo9boxiYTEyrvvcgsjRBo",
                                         alpha = 0.6f,
                                         contentScale = ContentScale.Crop,

@@ -165,7 +165,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun configureSu() {
-        Shell.enableVerboseLogging = BuildConfig.DEBUG
         Shell.setDefaultBuilder(
             Shell.Builder.create()
                 .setFlags(Shell.FLAG_REDIRECT_STDERR)
